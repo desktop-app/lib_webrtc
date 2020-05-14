@@ -12,6 +12,7 @@ call gn gen out/Debug --ide=vs --args="!="!^
     is_debug=true !="^"!^
     symbol_level=2 !="^"!^
     use_custom_libcxx=false !="^"!^
+    use_libjpeg_turbo=false !="^"!^
     enable_iterator_debugging=true !="^"!^
     rtc_include_tests=true !="^"!^
     rtc_build_examples=true !="^"!^

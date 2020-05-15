@@ -8,7 +8,10 @@
 
 #include "base/weak_ptr.h"
 
+#include <crl/crl_object_on_queue.h>
+
 class QJsonObject;
+class QImage;
 
 namespace Webrtc {
 namespace details {
@@ -51,6 +54,7 @@ public:
 		int maxLayer = 0;
 		bool allowP2P = false;
 		Fn<void(QByteArray)> sendSignalingData;
+		Fn<void(QImage)> displayNextFrame;
 	};
 	explicit CallContext(const Config &config);
 	~CallContext();
@@ -58,6 +62,10 @@ public:
 	const rpl::variable<CallState> &state() const;
 
 	void setIsMuted(bool muted);
+	[[nodiscard]] QString getDebugInfo();
+	void stop();
+
+	bool receiveSignalingData(const QByteArray &json);
 
 	[[nodiscard]] static int MaxLayer();
 	[[nodiscard]] static QString Version();
@@ -66,23 +74,18 @@ private:
 	void init(const Config &config);
 
 	void tryAdvertising(const details::DescriptionWithType &data);
-	void stop();
 	void sendSdp(const details::DescriptionWithType &data);
 	void sendCandidate(const details::IceCandidate &data);
-	void receiveSignalingData(const QByteArray &json);
 	void receiveSessionDescription(const QJsonObject &object);
 	void receiveIceCandidate(const QJsonObject &object);
 
+	crl::object_on_queue<details::Connection> _connection;
+
 	bool _outgoing = false;
 	Fn<void(QByteArray)> _sendSignalingData;
-	crl::time _receiveTimeout = 0;
-	crl::time _ringTimeout = 0;
-	crl::time _connectTimeout = 0;
-	crl::time _packetTimeout = 0;
+	Fn<void(QImage)> _displayNextFrame;
 	rpl::variable<CallState> _state = CallState::Initializing;
 	int _signalBars = -1;
-
-	std::unique_ptr<details::Connection> _connection;
 	bool _receivedRemoteDescription = false;
 	rpl::lifetime _lifetime;
 

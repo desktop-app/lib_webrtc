@@ -8,6 +8,10 @@
 
 #include "api/scoped_refptr.h"
 
+#include <crl/crl_object_on_queue.h>
+
+class QImage;
+
 namespace rtc {
 class Thread;
 } // namespace rtc
@@ -35,14 +39,17 @@ struct DescriptionWithType {
 };
 
 class PeerConnectionObserver;
+class VideoRendererAdapter;
+class CapturerTrackSource;
 
 class Connection final {
 public:
-	Connection();
+	explicit Connection(crl::weak_on_queue<Connection> weak);
 	~Connection();
 
 	[[nodiscard]] rpl::producer<IceCandidate> iceCandidateDiscovered() const;
 	[[nodiscard]] rpl::producer<bool> connectionStateChanged() const;
+	[[noriscard]] rpl::producer<QImage> frameReceived() const;
 
 	void close();
 
@@ -60,27 +67,30 @@ public:
 
 private:
 	void init();
-	void startLocalVideo();
+	void startRemoteVideo();
 
+	crl::weak_on_queue<Connection> _weak;
 	rpl::event_stream<IceCandidate> _iceCandidateDiscovered;
 	rpl::event_stream<bool> _connectionStateChanged;
+	rpl::event_stream<QImage> _frames;
+
+	std::unique_ptr<VideoRendererAdapter> _sink;
 
 	std::unique_ptr<rtc::Thread> _networkThread;
 	std::unique_ptr<rtc::Thread> _workerThread;
 	std::unique_ptr<rtc::Thread> _signalingThread;
-	rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> _nativeFactory;
-
 	std::unique_ptr<PeerConnectionObserver> _observer;
-	rtc::scoped_refptr<webrtc::PeerConnectionInterface> _peerConnection;
 	std::unique_ptr<webrtc::MediaConstraints> _nativeConstraints;
-	bool _hasStartedRtcEventLog;
 
+	// The order is important. CapturerTrackSource should be destroyed on
+	// the Connection's thread, so this pointer should be here, before
+	// the VideoTrackInterface that holds reference to it.
+	rtc::scoped_refptr<CapturerTrackSource> _videoTrackSource;
+	rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> _nativeFactory;
+	rtc::scoped_refptr<webrtc::PeerConnectionInterface> _peerConnection;
 	rtc::scoped_refptr<webrtc::AudioTrackInterface> _localAudioTrack;
-
 	rtc::scoped_refptr<webrtc::VideoTrackSourceInterface> _nativeVideoSource;
 	rtc::scoped_refptr<webrtc::VideoTrackInterface> _localVideoTrack;
-	// VideoCameraCapturer *_videoCapturer;
-
 	rtc::scoped_refptr<webrtc::VideoTrackInterface> _remoteVideoTrack;
 
 };

@@ -29,6 +29,7 @@ PUBLIC
 target_link_libraries(lib_webrtc
 PUBLIC
     desktop-app::lib_base
+    desktop-app::lib_ffmpeg
     desktop-app::external_qt
 PRIVATE
     desktop-app::external_webrtc

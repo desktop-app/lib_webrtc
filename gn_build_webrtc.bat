@@ -11,6 +11,7 @@ call gn gen out/Debug --ide=vs --args="!="!^
     is_component_build=false !="^"!^
     is_debug=true !="^"!^
     symbol_level=2 !="^"!^
+    proprietary_codecs=true !="^"!^
     use_custom_libcxx=false !="^"!^
     use_libjpeg_turbo=false !="^"!^
     enable_iterator_debugging=true !="^"!^
@@ -22,6 +23,9 @@ call gn gen out/Debug --ide=vs --args="!="!^
     rtc_ssl_root=\"../../../openssl_1_1_1/include\" !="^"!^
     rtc_ssl_libs=[\"../../../openssl_1_1_1/out32.dbg/libssl.lib\",\"../../../openssl_1_1_1/out32/libcrypto.lib\"] !="^"!^
     rtc_builtin_ssl_root_certificates=true !="^"!^
+    rtc_build_ffmpeg=false !="^"!^
+    rtc_ffmpeg_root=\"../../../ffmpeg\" !="^"!^
+    rtc_ffmpeg_libs=[\"../../../ffmpeg/libavutil/libavutil.a\"] !="^"!^
     rtc_enable_protobuf=false !="^"!^
 "
 

@@ -12,25 +12,18 @@
 
 #include <QtCore/QJsonObject>
 #include <QtCore/QJsonDocument>
+#include <QtGui/QImage>
 
 namespace Webrtc {
 namespace {
 
 using namespace details;
 
-constexpr auto kDefaultReceiveTimeout = 20 * crl::time(1000);
-constexpr auto kDefaultRingTimeout = 90 * crl::time(1000);
-constexpr auto kDefaultConnectTimeout = 30 * crl::time(1000);
-constexpr auto kDefaultPacketTimeout = 10 * crl::time(1000);
 constexpr auto kRetryAdvertisingTimeout = crl::time(1000);
 
 } // namespace
 
-CallContext::CallContext(const Config &config)
-: _receiveTimeout(kDefaultReceiveTimeout)
-, _ringTimeout(kDefaultRingTimeout)
-, _connectTimeout(kDefaultConnectTimeout)
-, _packetTimeout(kDefaultPacketTimeout) {
+CallContext::CallContext(const Config &config) {
     init(config);
 }
 
@@ -45,26 +38,34 @@ void CallContext::init(const Config &config) {
 
 	_outgoing = config.outgoing;
     _sendSignalingData = config.sendSignalingData;
+	_displayNextFrame = config.displayNextFrame;
 
-    //[RTCAudioSession sharedInstance] .useManualAudio = true;
-    //[RTCAudioSession sharedInstance] .isAudioEnabled = true;
-
-	_connection = std::make_unique<Connection>();
-	_connection->iceCandidateDiscovered(
-	) | rpl::start_with_next([=](const IceCandidate &data) {
+	_connection.producer_on_main([](const Connection &connection) {
+		return connection.iceCandidateDiscovered();
+	}) | rpl::start_with_next([=](const IceCandidate &data) {
         sendCandidate(data);
     }, _lifetime);
-    _connection->connectionStateChanged(
-    ) | rpl::start_with_next([=](bool connected) {
+	_connection.producer_on_main([](const Connection &connection) {
+		return connection.connectionStateChanged();
+	}) | rpl::start_with_next([=](bool connected) {
         _state = connected ? CallState::Connected : CallState::Initializing;
     }, _lifetime);
+	_connection.producer_on_main([](const Connection &connection) {
+		return connection.frameReceived();
+	}) | rpl::start_with_next([=](QImage frame) {
+		_displayNextFrame(std::move(frame));
+	}, _lifetime);
 
     if (_outgoing) {
-        _connection->getOffer([=](const DescriptionWithType &data) {
-            _connection->setLocalDescription(data, [=] {
-                tryAdvertising(data);
-            });
-        });
+		const auto that = base::make_weak(this);
+		_connection.with([=](Connection &connection) {
+			const auto raw = &connection;
+			raw->getOffer([=](const DescriptionWithType &data) {
+				raw->setLocalDescription(data, [=] {
+					crl::on_main(that, [=] { tryAdvertising(data); });
+				});
+			});
+		});
     }
 }
 
@@ -88,7 +89,9 @@ void CallContext::tryAdvertising(const DescriptionWithType &data) {
 }
 
 void CallContext::stop() {
-	_connection->close();
+	_connection.with_sync([](Connection &connection) {
+		connection.close();
+	});
 }
 
 void CallContext::sendSdp(const DescriptionWithType &data) {
@@ -110,20 +113,23 @@ void CallContext::sendCandidate(const IceCandidate &data) {
 	_sendSignalingData(QJsonDocument(json).toJson(QJsonDocument::Compact));
 }
 
-void CallContext::receiveSignalingData(const QByteArray &data) {
+bool CallContext::receiveSignalingData(const QByteArray &data) {
 	const auto parsed = QJsonDocument::fromJson(data);
 	if (!parsed.isObject()) {
-		return;
+		return false;
 	}
 	const auto object = parsed.object();
 	const auto messageType = object.value(u"messageType"_q).toString();
 	if (messageType.isEmpty()) {
-		return;
+		return false;
 	} else if (messageType == u"sessionDescription"_q) {
 		receiveSessionDescription(object);
 	} else if (messageType == u"iceCandidate"_q) {
 		receiveIceCandidate(object);
+	} else {
+		return false;
 	}
+	return true;
 }
 
 void CallContext::receiveSessionDescription(const QJsonObject &object) {
@@ -141,34 +147,48 @@ void CallContext::receiveSessionDescription(const QJsonObject &object) {
 		.type = typeObject.toString(),
 	};
 	_receivedRemoteDescription = true;
-	_connection->setRemoteDescription(data, [=] {
-		if (!_outgoing) {
-			_connection->getAnswer([=](const DescriptionWithType &data) {
-				_connection->setLocalDescription(data, [=] {
-					sendSdp(data);
+
+	const auto outgoing = _outgoing;
+	const auto weak = base::make_weak(this);
+	_connection.with([=](Connection &connection) {
+		const auto raw = &connection;
+		raw->setRemoteDescription(data, [=] {
+			if (!outgoing) {
+				raw->getAnswer([=](const DescriptionWithType &data) {
+					raw->setLocalDescription(data, [=] {
+						crl::on_main(weak, [=] { sendSdp(data); });
+					});
 				});
-			});
-		}
+			}
+		});
 	});
 }
 
 void CallContext::receiveIceCandidate(const QJsonObject &object) {
-	const auto sdpObject = object.value(u"sdp"_q);
-	const auto mLineIndexObject = object.value(u"mLineIndex"_q);
-	const auto sdpMidObject = object.value(u"sdpMid"_q);
-	if (!sdpObject.isString() || !mLineIndexObject.isDouble()) {
-		return;
-	}
-	const auto data = IceCandidate{
-		.sdp = sdpObject.toString(),
-		.sdpMid = sdpMidObject.toString(),
-		.mLineIndex = mLineIndexObject.toInt(),
-	};
-	_connection->addIceCandidate(data);
+	_connection.with([=](Connection &connection) {
+		const auto sdpObject = object.value(u"sdp"_q);
+		const auto mLineIndexObject = object.value(u"mLineIndex"_q);
+		const auto sdpMidObject = object.value(u"sdpMid"_q);
+		if (!sdpObject.isString() || !mLineIndexObject.isDouble()) {
+			return;
+		}
+		const auto data = IceCandidate{
+			.sdp = sdpObject.toString(),
+			.sdpMid = sdpMidObject.toString(),
+			.mLineIndex = mLineIndexObject.toInt(),
+		};
+		connection.addIceCandidate(data);
+	});
 }
 
 void CallContext::setIsMuted(bool muted) {
-	_connection->setIsMuted(muted);
+	_connection.with([=](Connection &connection) {
+		connection.setIsMuted(muted);
+	});
+}
+
+QString CallContext::getDebugInfo() {
+	return "WebRTC, Version: " + Version();
 }
 
 } // namespace Webrtc

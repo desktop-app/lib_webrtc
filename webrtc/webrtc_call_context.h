@@ -85,7 +85,6 @@ private:
 	Fn<void(QByteArray)> _sendSignalingData;
 	Fn<void(QImage)> _displayNextFrame;
 	rpl::variable<CallState> _state = CallState::Initializing;
-	int _signalBars = -1;
 	bool _receivedRemoteDescription = false;
 	rpl::lifetime _lifetime;
 

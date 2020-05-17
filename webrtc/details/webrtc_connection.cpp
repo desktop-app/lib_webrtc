@@ -18,13 +18,12 @@
 #include "api/peer_connection_interface.h"
 #include "api/video_track_source_proxy.h"
 #include "modules/audio_device/include/audio_device.h"
-#include "modules/audio_device/win/core_audio_utility_win.h"
 #include "modules/video_capture/video_capture.h"
 #include "modules/video_capture/video_capture_factory.h"
 #include "media/engine/webrtc_media_engine.h"
 #include "pc/video_track_source.h"
 #include "sdk/media_constraints.h"
-#include "test/vcm_capturer.h"
+#include "test/platform_video_capturer.h"
 
 #define _MATH_DEFINES_DEFINED
 
@@ -267,14 +266,14 @@ public:
 
 protected:
 	explicit CapturerTrackSource(
-		std::unique_ptr<webrtc::test::VcmCapturer> capturer)
+		std::unique_ptr<webrtc::test::TestVideoCapturer> capturer)
 		: VideoTrackSource(/*remote=*/false), capturer_(std::move(capturer)) {}
 
 private:
 	rtc::VideoSourceInterface<webrtc::VideoFrame>* source() override {
 		return capturer_.get();
 	}
-	std::unique_ptr<webrtc::test::VcmCapturer> capturer_;
+	std::unique_ptr<webrtc::test::TestVideoCapturer> capturer_;
 
 };
 
@@ -282,17 +281,18 @@ rtc::scoped_refptr<CapturerTrackSource> CapturerTrackSource::Create() {
 	const size_t kWidth = 640;
 	const size_t kHeight = 480;
 	const size_t kFps = 30;
-	std::unique_ptr<webrtc::test::VcmCapturer> capturer;
+#ifndef WEBRTC_MAC
 	std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(
 		webrtc::VideoCaptureFactory::CreateDeviceInfo());
 	if (!info) {
 		return nullptr;
 	}
 	int num_devices = info->NumberOfDevices();
+#else // WEBRTC_MAC
+	int num_devices = 1;
+#endif // WEBRTC_MAC
 	for (int i = 0; i < num_devices; ++i) {
-		capturer = std::unique_ptr<webrtc::test::VcmCapturer>(
-			webrtc::test::VcmCapturer::Create(kWidth, kHeight, kFps, i));
-		if (capturer) {
+		if (auto capturer = webrtc::test::CreateVideoCapturer(kWidth, kHeight, kFps, i)) {
 			return new rtc::RefCountedObject<CapturerTrackSource>(
 				std::move(capturer));
 		}

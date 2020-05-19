@@ -25,7 +25,7 @@ call gn gen out/Debug --ide=vs --args="!="!^
     rtc_builtin_ssl_root_certificates=true !="^"!^
     rtc_build_ffmpeg=false !="^"!^
     rtc_ffmpeg_root=\"../../../ffmpeg\" !="^"!^
-    rtc_ffmpeg_libs=[\"../../../ffmpeg/libavutil/libavutil.a\"] !="^"!^
+    rtc_ffmpeg_libs=[\"../../../ffmpeg/libavutil/libavutil.a\",\"../../../ffmpeg/libavcodec/libavcodec.a\",\"../../../ffmpeg/libswscale/libswscale.a\",\"../../../ffmpeg/libswresample/libswresample.a\"] !="^"!^
     rtc_enable_protobuf=false !="^"!^
 "
 

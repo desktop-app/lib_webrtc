@@ -13,7 +13,8 @@ call gn gen out/Debug --ide=vs --args="!="!^
     symbol_level=2 !="^"!^
     proprietary_codecs=true !="^"!^
     use_custom_libcxx=false !="^"!^
-    use_libjpeg_turbo=false !="^"!^
+    use_system_libjpeg=true !="^"!^
+    system_libjpeg_root=\"../../../qt_5_12_8/qtbase/src/3rdparty/libjpeg\" !="^"!^
     enable_iterator_debugging=true !="^"!^
     rtc_include_tests=true !="^"!^
     rtc_build_examples=true !="^"!^
@@ -56,4 +57,4 @@ rem rtc_opus_variable_complexity?
 rem rtc_use_h264?
 
 echo.
-echo Configuration done, now run "ninja -C out/Debug" and "ninja -C out/Release".
+echo Configuration done, now run "ninja -C out/Debug webrtc test:platform_video_capturer test:video_test_common".

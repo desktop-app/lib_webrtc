@@ -13,12 +13,8 @@ get_filename_component(src_loc . REALPATH)
 target_precompile_headers(lib_webrtc PRIVATE ${src_loc}/webrtc/webrtc_pch.h)
 nice_target_sources(lib_webrtc ${src_loc}
 PRIVATE
-    webrtc/webrtc_call_context.cpp
-    webrtc/webrtc_call_context.h
-    webrtc/webrtc_common.cpp
-    webrtc/webrtc_common.h
-    webrtc/details/webrtc_connection.cpp
-    webrtc/details/webrtc_connection.h
+    webrtc/webrtc_video_sink.cpp
+    webrtc/webrtc_video_sink.h
 )
 
 target_include_directories(lib_webrtc

@@ -9,11 +9,13 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
         symbol_level=2 \
         proprietary_codecs=true \
         use_custom_libcxx=false \
-        use_libjpeg_turbo=false \
+        use_system_libjpeg=true \
+        system_libjpeg_root=\"../../../qt_5_12_8/qtbase/src/3rdparty/libjpeg\" \
         use_xcode_clang=true \
         use_rtti=true \
         enable_iterator_debugging=true \
         enable_dsyms=true \
+        mac_deployment_target=\"10.12.0\" \
         rtc_include_tests=true \
         rtc_build_examples=true \
         rtc_build_tools=true \
@@ -87,4 +89,4 @@ fi
 # rtc_opus_variable_complexity?
 # rtc_use_h264?
 
-echo Configuration done, now run "ninja -C out/Debug" and "ninja -C out/Release".
+echo Configuration done, now run "ninja -C out/Debug webrtc sdk:native_video sdk:videoframebuffer_objc sdk:videocapture_objc sdk:videocodec_objc sdk:videotoolbox_objc sdk:video_toolbox_cc sdk:vpx_codec_constants sdk:native_api sdk:vp8 sdk:vp9 sdk:wrapped_native_codec_objc".

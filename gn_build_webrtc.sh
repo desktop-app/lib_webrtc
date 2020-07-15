@@ -89,4 +89,4 @@ fi
 # rtc_opus_variable_complexity?
 # rtc_use_h264?
 
-echo Configuration done, now run "ninja -C out/Debug webrtc sdk:native_video sdk:videoframebuffer_objc sdk:videocapture_objc sdk:videocodec_objc sdk:videotoolbox_objc sdk:video_toolbox_cc sdk:vpx_codec_constants sdk:native_api sdk:vp8 sdk:vp9 sdk:wrapped_native_codec_objc".
+echo Configuration done, now run "ninja -C out/Debug webrtc".

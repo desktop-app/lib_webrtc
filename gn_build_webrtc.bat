@@ -16,10 +16,10 @@ call gn gen out/Debug --ide=vs --args="!="!^
     use_system_libjpeg=true !="^"!^
     system_libjpeg_root=\"../../../qt_5_12_8/qtbase/src/3rdparty/libjpeg\" !="^"!^
     enable_iterator_debugging=true !="^"!^
-    rtc_include_tests=true !="^"!^
-    rtc_build_examples=true !="^"!^
-    rtc_build_tools=true !="^"!^
-    rtc_build_opus=true !="^"!^
+    rtc_include_tests=false !="^"!^
+    rtc_build_examples=false !="^"!^
+    rtc_build_tools=false !="^"!^
+    rtc_build_opus=false !="^"!^
     rtc_build_ssl=false !="^"!^
     rtc_ssl_root=\"../../../openssl_1_1_1/include\" !="^"!^
     rtc_ssl_libs=[\"../../../openssl_1_1_1/out32.dbg/libssl.lib\",\"../../../openssl_1_1_1/out32/libcrypto.lib\"] !="^"!^
@@ -27,6 +27,7 @@ call gn gen out/Debug --ide=vs --args="!="!^
     rtc_build_ffmpeg=false !="^"!^
     rtc_ffmpeg_root=\"../../../ffmpeg\" !="^"!^
     rtc_ffmpeg_libs=[\"../../../ffmpeg/libavutil/libavutil.a\",\"../../../ffmpeg/libavcodec/libavcodec.a\",\"../../../ffmpeg/libswscale/libswscale.a\",\"../../../ffmpeg/libswresample/libswresample.a\"] !="^"!^
+    rtc_opus_root=\"../../../opus/include\" !="^"!^
     rtc_enable_protobuf=false !="^"!^
 "
 
@@ -57,4 +58,4 @@ rem rtc_opus_variable_complexity?
 rem rtc_use_h264?
 
 echo.
-echo Configuration done, now run "ninja -C out/Debug webrtc test:platform_video_capturer test:video_test_common".
+echo Configuration done, now run "ninja -C out/Debug webrtc".

@@ -16,6 +16,8 @@
 namespace webrtc {
 namespace {
 
+constexpr auto kDropFramesWhileInactive = 5 * crl::time(1000);
+
 [[nodiscard]] bool GoodForRequest(
 		const QImage &image,
 		int rotation,
@@ -365,7 +367,9 @@ VideoTrack::~VideoTrack() {
 }
 
 rpl::producer<> VideoTrack::renderNextFrame() const {
-	return _sink->renderNextFrameOnMain();
+	return rpl::merge(
+		_sink->renderNextFrameOnMain(),
+		_enabled.changes() | rpl::to_empty);
 }
 
 auto VideoTrack::sink()
@@ -373,11 +377,36 @@ auto VideoTrack::sink()
 	return _sink;
 }
 
+[[nodiscard]] bool VideoTrack::enabled() const {
+	return _enabled.current();
+}
+
+[[nodiscard]] rpl::producer<bool> VideoTrack::enabledValue() const {
+	return _enabled.value();
+}
+
+[[nodiscard]] rpl::producer<bool> VideoTrack::enabledChanges() const {
+	return _enabled.changes();
+}
+
+void VideoTrack::setEnabled(bool enabled) {
+	if (!enabled) {
+		_disabledFrom = crl::now();
+	} else {
+		_disabledFrom = 0;
+	}
+	_enabled = enabled;
+}
+
 void VideoTrack::markFrameShown() {
 	_sink->markFrameShown();
 }
 
 QImage VideoTrack::frame(const FrameRequest &request) {
+	if (_disabledFrom > 0
+		&& (_disabledFrom + kDropFramesWhileInactive > crl::now())) {
+		return QImage();
+	}
 	const auto frame = _sink->frameForPaint();
 	const auto preparedFor = frame->request;
 	const auto changed = !preparedFor.goodFor(request);

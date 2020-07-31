@@ -8,6 +8,7 @@
 
 #include "ffmpeg/ffmpeg_utility.h"
 
+#include <rpl/variable.h>
 #include <QtCore/QSize>
 #include <QtGui/QImage>
 
@@ -66,6 +67,11 @@ public:
 	[[nodiscard]] auto sink()
 		-> std::shared_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>>;
 
+	[[nodiscard]] bool enabled() const;
+	[[nodiscard]] rpl::producer<bool> enabledValue() const;
+	[[nodiscard]] rpl::producer<bool> enabledChanges() const;
+	void setEnabled(bool enabled);
+
 private:
 	class Sink;
 
@@ -83,6 +89,8 @@ private:
 	static void PrepareFrameByRequests(not_null<Frame*> frame, int rotation);
 
 	std::shared_ptr<Sink> _sink;
+	rpl::variable<bool> _enabled = false;
+	crl::time _disabledFrom = 0;
 
 };
 

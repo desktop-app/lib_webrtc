@@ -58,7 +58,7 @@ struct FrameRequest {
 class VideoTrack final {
 public:
 	// Called from the main thread.
-	VideoTrack();
+	explicit VideoTrack(bool enabled);
 	~VideoTrack();
 
 	void markFrameShown();

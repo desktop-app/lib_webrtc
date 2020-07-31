@@ -367,7 +367,7 @@ rpl::producer<> VideoTrack::Sink::renderNextFrameOnMain() const {
 	return _renderNextFrameOnMain.events();
 }
 
-VideoTrack::VideoTrack() {
+VideoTrack::VideoTrack(bool enabled) : _enabled(enabled) {
 	_sink = std::make_shared<Sink>();
 }
 

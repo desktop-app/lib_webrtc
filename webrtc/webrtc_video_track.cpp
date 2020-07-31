@@ -177,6 +177,7 @@ public:
 	void markFrameShown();
 	[[nodiscard]] not_null<Frame*> frameForPaint();
 	[[nodiscard]] rpl::producer<> renderNextFrameOnMain() const;
+	void destroyFrameForPaint();
 
 	void OnFrame(const webrtc::VideoFrame &nativeVideoFrame) override;
 
@@ -200,7 +201,7 @@ private:
 
 	std::atomic<int> _counter = 0;
 
-	static constexpr auto kFramesCount = 4;
+	static constexpr auto kFramesCount = 3;
 	std::array<Frame, kFramesCount> _frames;
 
 	rpl::event_stream<> _renderNextFrameOnMain;
@@ -238,8 +239,8 @@ void VideoTrack::Sink::presentNextFrame(const FrameForDecode &frame) {
 	case 3: return;
 	case 4: present(4);
 	case 5: return;
-	case 6: present(6);
-	case 7: return;
+	//case 6: present(6);
+	//case 7: return;
 	}
 	Unexpected("Counter value in VideoTrack::Sink::presentNextFrame.");
 }
@@ -345,14 +346,21 @@ bool VideoTrack::Sink::firstPresentHappened() const {
 	case 3: return jump(3);
 	case 4: return;
 	case 5: return jump(5);
-	case 6: return;
-	case 7: return jump(7);
+	//case 6: return;
+	//case 7: return jump(7);
 	}
 	Unexpected("Counter value in VideoTrack::Sink::markFrameShown.");
 }
 
 not_null<VideoTrack::Frame*> VideoTrack::Sink::frameForPaint() {
 	return getFrame(counter() / 2);
+}
+
+void VideoTrack::Sink::destroyFrameForPaint() {
+	const auto frame = getFrame(counter() / 2);
+	if (!frame->original.isNull()) {
+		frame->original = frame->prepared = QImage();
+	}
 }
 
 rpl::producer<> VideoTrack::Sink::renderNextFrameOnMain() const {
@@ -396,6 +404,9 @@ void VideoTrack::setEnabled(bool enabled) {
 		_disabledFrom = 0;
 	}
 	_enabled = enabled;
+	if (!enabled) {
+		_sink->destroyFrameForPaint();
+	}
 }
 
 void VideoTrack::markFrameShown() {
@@ -405,6 +416,7 @@ void VideoTrack::markFrameShown() {
 QImage VideoTrack::frame(const FrameRequest &request) {
 	if (_disabledFrom > 0
 		&& (_disabledFrom + kDropFramesWhileInactive > crl::now())) {
+		_sink->destroyFrameForPaint();
 		return QImage();
 	}
 	const auto frame = _sink->frameForPaint();

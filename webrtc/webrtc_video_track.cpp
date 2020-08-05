@@ -367,7 +367,7 @@ rpl::producer<> VideoTrack::Sink::renderNextFrameOnMain() const {
 	return _renderNextFrameOnMain.events();
 }
 
-VideoTrack::VideoTrack(bool enabled) : _enabled(enabled) {
+VideoTrack::VideoTrack(VideoState state) : _state(state) {
 	_sink = std::make_shared<Sink>();
 }
 
@@ -377,7 +377,7 @@ VideoTrack::~VideoTrack() {
 rpl::producer<> VideoTrack::renderNextFrame() const {
 	return rpl::merge(
 		_sink->renderNextFrameOnMain(),
-		_enabled.changes() | rpl::to_empty);
+		_state.changes() | rpl::to_empty);
 }
 
 auto VideoTrack::sink()
@@ -385,26 +385,27 @@ auto VideoTrack::sink()
 	return _sink;
 }
 
-[[nodiscard]] bool VideoTrack::enabled() const {
-	return _enabled.current();
+[[nodiscard]] VideoState VideoTrack::state() const {
+	return _state.current();
 }
 
-[[nodiscard]] rpl::producer<bool> VideoTrack::enabledValue() const {
-	return _enabled.value();
+[[nodiscard]] rpl::producer<VideoState> VideoTrack::stateValue() const {
+	return _state.value();
 }
 
-[[nodiscard]] rpl::producer<bool> VideoTrack::enabledChanges() const {
-	return _enabled.changes();
+[[nodiscard]] rpl::producer<VideoState> VideoTrack::stateChanges() const {
+	return _state.changes();
 }
 
-void VideoTrack::setEnabled(bool enabled) {
-	if (!enabled) {
-		_disabledFrom = crl::now();
-	} else {
+void VideoTrack::setState(VideoState state) {
+	if (state == VideoState::Active) {
 		_disabledFrom = 0;
+	} else {
+		_disabledFrom = crl::now();
 	}
-	_enabled = enabled;
-	if (!enabled) {
+	_state = state;
+	if (state != VideoState::Active) {
+		// save last frame?..
 		_sink->destroyFrameForPaint();
 	}
 }

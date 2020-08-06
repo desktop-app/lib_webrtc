@@ -69,6 +69,7 @@ public:
 
 	void markFrameShown();
 	[[nodiscard]] QImage frame(const FrameRequest &request);
+	[[nodiscard]] QSize frameSize() const;
 	[[nodiscard]] rpl::producer<> renderNextFrame() const;
 	[[nodiscard]] auto sink()
 		-> std::shared_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>>;

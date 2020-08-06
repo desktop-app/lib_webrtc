@@ -446,6 +446,10 @@ QImage VideoTrack::frame(const FrameRequest &request) {
 	return frame->prepared;
 }
 
+QSize VideoTrack::frameSize() const {
+	return _sink->frameForPaint()->original.size();
+}
+
 void VideoTrack::PrepareFrameByRequests(
 		not_null<Frame*> frame,
 		int rotation) {

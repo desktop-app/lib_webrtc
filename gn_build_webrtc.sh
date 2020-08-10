@@ -39,10 +39,10 @@ else
         is_debug=true \
         is_clang=false \
         symbol_level=2 \
-        gtk_version=2 \
         proprietary_codecs=true \
         use_custom_libcxx=false \
-        use_libjpeg_turbo=false \
+        use_system_libjpeg=true \
+        system_libjpeg_root=\"../../../qt_5_12_8/qtbase/src/3rdparty/libjpeg\" \
         use_rtti=true \
         use_gold=false \
         use_sysroot=false \
@@ -106,10 +106,10 @@ else
         is_debug=false \
         is_clang=false \
         symbol_level=1 \
-        gtk_version=2 \
         proprietary_codecs=true \
         use_custom_libcxx=false \
-        use_libjpeg_turbo=false \
+        use_system_libjpeg=true \
+        system_libjpeg_root=\"../../../qt_5_12_8/qtbase/src/3rdparty/libjpeg\" \
         use_rtti=true \
         use_gold=false \
         use_sysroot=false \

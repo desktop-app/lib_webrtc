@@ -21,7 +21,7 @@ namespace webrtc {
 class VideoFrame;
 } // namespace webrtc
 
-namespace webrtc {
+namespace Webrtc {
 
 struct FrameRequest {
 	QSize resize;
@@ -101,4 +101,4 @@ private:
 
 };
 
-} // namespace webrtc
+} // namespace Webrtc

@@ -73,7 +73,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
         target_os=\"mac\" \
         is_component_build=false \
         is_debug=false \
-        symbol_level=1 \
+        symbol_level=2 \
         proprietary_codecs=true \
         use_custom_libcxx=false \
         use_system_libjpeg=true \
@@ -105,7 +105,7 @@ else
         is_component_build=false \
         is_debug=false \
         is_clang=false \
-        symbol_level=1 \
+        symbol_level=2 \
         proprietary_codecs=true \
         use_custom_libcxx=false \
         use_system_libjpeg=true \

@@ -13,7 +13,7 @@
 #include <QtGui/QImage>
 #include <QtGui/QPainter>
 
-namespace webrtc {
+namespace Webrtc {
 namespace {
 
 constexpr auto kDropFramesWhileInactive = 5 * crl::time(1000);
@@ -466,4 +466,4 @@ void VideoTrack::PrepareFrameByRequests(
 	}
 }
 
-} // namespace webrtc
+} // namespace Webrtc

@@ -8,10 +8,11 @@
 
 #include "ffmpeg/ffmpeg_utility.h"
 
-#include <api/video/video_sink_interface.h>
-#include <api/video/video_frame.h>
 #include <QtGui/QImage>
 #include <QtGui/QPainter>
+
+#include <api/video/video_sink_interface.h>
+#include <api/video/video_frame.h>
 
 namespace Webrtc {
 namespace {

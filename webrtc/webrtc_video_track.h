@@ -80,6 +80,7 @@ public:
 	void setState(VideoState state);
 
 private:
+#ifndef DESKTOP_APP_DISABLE_WEBRTC_INTEGRATION
 	class Sink;
 
 	struct Frame {
@@ -96,8 +97,10 @@ private:
 	static void PrepareFrameByRequests(not_null<Frame*> frame, int rotation);
 
 	std::shared_ptr<Sink> _sink;
-	rpl::variable<VideoState> _state;
 	crl::time _disabledFrom = 0;
+#endif // DESKTOP_APP_DISABLE_WEBRTC_INTEGRATION
+
+	rpl::variable<VideoState> _state;
 
 };
 

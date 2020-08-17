@@ -13,6 +13,8 @@ get_filename_component(src_loc . REALPATH)
 target_precompile_headers(lib_webrtc PRIVATE ${src_loc}/webrtc/webrtc_pch.h)
 nice_target_sources(lib_webrtc ${src_loc}
 PRIVATE
+    webrtc/webrtc_camera_utilities.cpp
+    webrtc/webrtc_camera_utilities.h
     webrtc/webrtc_video_track.cpp
     webrtc/webrtc_video_track.h
     webrtc/webrtc_video_track_dummy.cpp

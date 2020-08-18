@@ -8,11 +8,25 @@
 
 namespace Webrtc {
 
-struct CameraInfo {
+struct VideoInput {
 	QString id;
 	QString name;
 };
 
-[[nodiscard]] std::vector<CameraInfo> GetCamerasList();
+[[nodiscard]] std::vector<VideoInput> GetVideoInputList();
+
+struct AudioInput {
+	QString id;
+	QString name;
+};
+
+[[nodiscard]] std::vector<AudioInput> GetAudioInputList();
+
+struct AudioOutput {
+	QString id;
+	QString name;
+};
+
+[[nodiscard]] std::vector<AudioOutput> GetAudioOutputList();
 
 } // namespace Webrtc

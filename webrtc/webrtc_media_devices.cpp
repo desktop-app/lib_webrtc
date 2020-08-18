@@ -24,7 +24,7 @@ std::vector<VideoInput> GetVideoInputList() {
 	}
 	const auto count = info->NumberOfDevices();
 	for (auto i = uint32_t(); i != count; ++i) {
-		constexpr auto kLengthLimit = 4096;
+		constexpr auto kLengthLimit = 256;
 		auto id = std::string(kLengthLimit, char(0));
 		auto name = std::string(kLengthLimit, char(0));
 		info->GetDeviceName(

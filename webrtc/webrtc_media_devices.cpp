@@ -6,6 +6,7 @@
 //
 #include "webrtc/webrtc_media_devices.h"
 
+#include "webrtc/mac/webrtc_media_devices_mac.h"
 #include "api/task_queue/default_task_queue_factory.h"
 #include "modules/video_capture/video_capture_factory.h"
 #include "modules/audio_device/include/audio_device_factory.h"
@@ -16,6 +17,9 @@
 namespace Webrtc {
 
 std::vector<VideoInput> GetVideoInputList() {
+#ifdef WEBRTC_MAC
+	return MacGetVideoInputList();
+#else // WEBRTC_MAC
 	const auto info = std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo>(
 		webrtc::VideoCaptureFactory::CreateDeviceInfo());
 	auto result = std::vector<VideoInput>();
@@ -39,6 +43,7 @@ std::vector<VideoInput> GetVideoInputList() {
 		});
 	}
 	return result;
+#endif // WEBRTC_MAC
 }
 
 std::vector<AudioInput> GetAudioInputList() {

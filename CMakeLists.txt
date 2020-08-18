@@ -18,7 +18,17 @@ PRIVATE
     webrtc/webrtc_video_track.cpp
     webrtc/webrtc_video_track.h
     webrtc/webrtc_video_track_dummy.cpp
+
+    webrtc/mac/webrtc_media_devices_mac.h
+    webrtc/mac/webrtc_media_devices_mac.mm
 )
+
+if (APPLE)
+    target_compile_definitions(lib_webrtc
+    PRIVATE
+        WEBRTC_MAC
+    )
+endif()
 
 target_include_directories(lib_webrtc
 PUBLIC

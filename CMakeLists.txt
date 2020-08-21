@@ -13,6 +13,8 @@ get_filename_component(src_loc . REALPATH)
 target_precompile_headers(lib_webrtc PRIVATE ${src_loc}/webrtc/webrtc_pch.h)
 nice_target_sources(lib_webrtc ${src_loc}
 PRIVATE
+    webrtc/webrtc_audio_input_tester.cpp
+    webrtc/webrtc_audio_input_tester.h
     webrtc/webrtc_media_devices.cpp
     webrtc/webrtc_media_devices.h
     webrtc/webrtc_video_track.cpp

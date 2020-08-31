@@ -281,7 +281,7 @@ bool VideoTrack::Sink::decodeFrame(
 	uint8_t *dst[AV_NUM_DATA_POINTERS] = { frame->original.bits(), nullptr };
 	int dstLineSize[AV_NUM_DATA_POINTERS] = { frame->original.bytesPerLine(), 0 };
 
-	const auto lines = sws_scale(
+	sws_scale(
 		_decodeContext.get(),
 		src,
 		srcLineSize,
@@ -290,7 +290,6 @@ bool VideoTrack::Sink::decodeFrame(
 		dst,
 		dstLineSize);
 
-	Ensures(lines == frame->original.height());
 	return true;
 }
 

@@ -95,8 +95,7 @@ void PaintFrameInner(
 	const auto hints = {
 		QPainter::Antialiasing,
 		QPainter::SmoothPixmapTransform,
-		QPainter::TextAntialiasing,
-		QPainter::HighQualityAntialiasing
+		QPainter::TextAntialiasing
 	};
 	for (const auto hint : hints) {
 		p.setRenderHint(hint);

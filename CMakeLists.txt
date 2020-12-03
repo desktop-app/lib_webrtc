@@ -23,6 +23,8 @@ PRIVATE
 
     webrtc/mac/webrtc_media_devices_mac.h
     webrtc/mac/webrtc_media_devices_mac.mm
+
+    webrtc/webrtc_pch.h
 )
 
 if (APPLE)

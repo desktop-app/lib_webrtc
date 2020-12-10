@@ -11,6 +11,8 @@
 #include <QtGui/QImage>
 #include <QtGui/QPainter>
 
+#undef emit
+
 #include <api/video/video_sink_interface.h>
 #include <api/video/video_frame.h>
 

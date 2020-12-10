@@ -6,6 +6,8 @@
 //
 #include "webrtc/webrtc_media_devices.h"
 
+#undef emit
+
 #include "webrtc/mac/webrtc_media_devices_mac.h"
 #include "api/task_queue/default_task_queue_factory.h"
 #include "modules/video_capture/video_capture_factory.h"

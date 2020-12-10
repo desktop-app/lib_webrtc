@@ -6,6 +6,8 @@
 //
 #include "webrtc/webrtc_audio_input_tester.h"
 
+#undef emit
+
 #include "media/engine/webrtc_media_engine.h"
 #include "api/task_queue/default_task_queue_factory.h"
 #include "crl/crl_object_on_thread.h"

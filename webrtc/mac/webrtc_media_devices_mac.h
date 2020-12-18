@@ -12,4 +12,45 @@ namespace Webrtc {
 
 [[nodiscard]] std::vector<VideoInput> MacGetVideoInputList();
 
+class MacMediaDevices final : public MediaDevices {
+public:
+	MacMediaDevices(
+		QString audioInput,
+		QString audioOutput,
+		QString videoInput);
+    ~MacMediaDevices();
+
+	rpl::producer<QString> audioInputId() override {
+		return _resolvedAudioInputId.value();
+	}
+	rpl::producer<QString> audioOutputId() override {
+		return _resolvedAudioOutputId.value();
+	}
+	rpl::producer<QString> videoInputId() override {
+		return _resolvedVideoInputId.value();
+	}
+
+	void switchToAudioInput(QString id) override;
+	void switchToAudioOutput(QString id) override;
+	void switchToVideoInput(QString id) override;
+
+private:
+    void audioInputRefreshed();
+    void audioOutputRefreshed();
+    void clearAudioOutputCallbacks();
+    void videoInputRefreshed();
+
+	QString _audioInputId;
+	QString _audioOutputId;
+	QString _videoInputId;
+
+    rpl::variable<QString> _resolvedAudioInputId;
+    rpl::variable<QString> _resolvedAudioOutputId;
+    rpl::variable<QString> _resolvedVideoInputId;
+
+    Fn<void()> _defaultAudioOutputChanged;
+    Fn<void()> _audioOutputDevicesChanged;
+
+};
+
 } // namespace Webrtc

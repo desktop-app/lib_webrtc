@@ -15,6 +15,51 @@
 //#include "media/engine/webrtc_media_engine.h"
 
 namespace Webrtc {
+namespace {
+
+#ifndef WEBRTC_MAC
+
+class MediaDevicesSimple final : public MediaDevices {
+public:
+	MediaDevicesSimple(
+		QString audioInput,
+		QString audioOutput,
+		QString videoInput)
+	: _audioInputId(audioInput)
+	, _audioOutputId(audioOutput)
+	, _videoInputId(videoInput) {
+	}
+
+	rpl::producer<QString> audioInputId() override {
+		return _audioInputId.value();
+	}
+	rpl::producer<QString> audioOutputId() override {
+		return _audioOutputId.value();
+	}
+	rpl::producer<QString> videoInputId() override {
+		return _videoInputId.value();
+	}
+
+	void switchToAudioInput(QString id) override {
+		_audioInputId = id;
+	}
+	void switchToAudioOutput(QString id) override {
+		_audioOutputId = id;
+	}
+	void switchToVideoInput(QString id) override {
+		_videoInputId = id;
+	}
+
+private:
+	rpl::variable<QString> _audioInputId;
+	rpl::variable<QString> _audioOutputId;
+	rpl::variable<QString> _videoInputId;
+
+};
+
+#endif // !WEBRTC_MAC
+
+} // namespace
 
 std::vector<VideoInput> GetVideoInputList() {
 #ifdef WEBRTC_MAC
@@ -37,9 +82,11 @@ std::vector<VideoInput> GetVideoInputList() {
 			name.size(),
 			id.data(),
 			id.size());
+		const auto utfName = QString::fromUtf8(name.c_str());
+		const auto utfId = id[0] ? QString::fromUtf8(id.c_str()) : utfName;
 		result.push_back({
-			.id = QString::fromUtf8(id.c_str()),
-			.name = QString::fromUtf8(name.c_str())
+			.id = utfId,
+			.name = utfName,
 		});
 	}
 	return result;
@@ -64,9 +111,16 @@ std::vector<AudioInput> GetAudioInputList() {
 			char name[webrtc::kAdmMaxDeviceNameSize + 1] = { 0 };
 			char id[webrtc::kAdmMaxGuidSize + 1] = { 0 };
 			info->RecordingDeviceName(i, name, id);
+			const auto utfName = QString::fromUtf8(name);
+			const auto utfId = id[0] ? QString::fromUtf8(id) : utfName;
+#ifdef WEBRTC_MAC
+			if (utfName.startsWith("default (") && utfName.endsWith(")")) {
+				continue;
+			}
+#endif // WEBRTC_MAC
 			result.push_back({
-				.id = QString::fromUtf8(id),
-				.name = QString::fromUtf8(name)
+				.id = utfId,
+				.name = utfName,
 			});
 		}
 	};
@@ -97,9 +151,16 @@ std::vector<AudioOutput> GetAudioOutputList() {
 			char name[webrtc::kAdmMaxDeviceNameSize + 1] = { 0 };
 			char id[webrtc::kAdmMaxGuidSize + 1] = { 0 };
 			info->PlayoutDeviceName(i, name, id);
+			const auto utfName = QString::fromUtf8(name);
+			const auto utfId = id[0] ? QString::fromUtf8(id) : utfName;
+#ifdef WEBRTC_MAC
+			if (utfName.startsWith("default (") && utfName.endsWith(")")) {
+				continue;
+			}
+#endif // WEBRTC_MAC
 			result.push_back({
-				.id = QString::fromUtf8(id),
-				.name = QString::fromUtf8(name)
+				.id = utfId,
+				.name = utfName,
 			});
 		}
 	};
@@ -110,6 +171,17 @@ std::vector<AudioOutput> GetAudioOutputList() {
 		resolve();
 	}
 	return result;
+}
+
+std::unique_ptr<MediaDevices> CreateMediaDevices(
+		QString audioInput,
+		QString audioOutput,
+		QString videoInput) {
+#ifdef WEBRTC_MAC
+	return std::make_unique<MacMediaDevices>(audioInput, audioOutput, videoInput);
+#else // WEBRTC_MAC
+	return std::make_unique<MediaDevicesSimple>(audioInput, audioOutput, videoInput);
+#endif
 }
 
 } // namespace Webrtc

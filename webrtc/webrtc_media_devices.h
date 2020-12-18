@@ -6,6 +6,8 @@
 //
 #pragma once
 
+#include <rpl/producer.h>
+
 namespace Webrtc {
 
 struct VideoInput {
@@ -28,5 +30,23 @@ struct AudioOutput {
 };
 
 [[nodiscard]] std::vector<AudioOutput> GetAudioOutputList();
+
+class MediaDevices {
+public:
+	virtual ~MediaDevices() = default;
+
+	[[nodiscard]] virtual rpl::producer<QString> audioInputId() = 0;
+	[[nodiscard]] virtual rpl::producer<QString> audioOutputId() = 0;
+	[[nodiscard]] virtual rpl::producer<QString> videoInputId() = 0;
+
+	virtual void switchToAudioInput(QString id) = 0;
+	virtual void switchToAudioOutput(QString id) = 0;
+	virtual void switchToVideoInput(QString id) = 0;
+};
+
+[[nodiscard]] std::unique_ptr<MediaDevices> CreateMediaDevices(
+	QString audioInput,
+	QString audioOutput,
+	QString videoInput);
 
 } // namespace Webrtc

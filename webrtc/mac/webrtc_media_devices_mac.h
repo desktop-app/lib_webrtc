@@ -39,6 +39,7 @@ private:
     void audioOutputRefreshed();
     void clearAudioOutputCallbacks();
     void videoInputRefreshed();
+    void clearAudioInputCallbacks();
 
 	QString _audioInputId;
 	QString _audioOutputId;
@@ -50,6 +51,8 @@ private:
 
     Fn<void()> _defaultAudioOutputChanged;
     Fn<void()> _audioOutputDevicesChanged;
+    Fn<void()> _defaultAudioInputChanged;
+    Fn<void()> _audioInputDevicesChanged;
 
 };
 

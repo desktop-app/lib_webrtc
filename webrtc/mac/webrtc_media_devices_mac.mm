@@ -27,6 +27,12 @@ auto AudioOutputDevicePropertyAddress = AudioObjectPropertyAddress{
 	.mElement = kAudioObjectPropertyElementMaster,
 };
 
+auto AudioInputDevicePropertyAddress = AudioObjectPropertyAddress{
+	.mSelector = kAudioHardwarePropertyDefaultInputDevice,
+	.mScope = kAudioObjectPropertyScopeGlobal,
+	.mElement = kAudioObjectPropertyElementMaster,
+};
+
 auto AudioDeviceListPropertyAddress = AudioObjectPropertyAddress{
     .mSelector = kAudioHardwarePropertyDevices,
 	.mScope = kAudioObjectPropertyScopeGlobal,
@@ -75,64 +81,75 @@ OSStatus PropertyChangedCallback(
 	return QString::fromUtf8(buffer);
 }
 
-[[nodiscard]] QString ComputeDefaultAudioOutputId() {
-	auto deviceId = AudioDeviceID(kAudioDeviceUnknown);
-	auto deviceIdSize = UInt32(sizeof(AudioDeviceID));
+[[nodiscard]] AudioDeviceID GetDeviceByUID(const QString &id) {
+	const auto utf = id.toUtf8();
+	auto uid = CFStringCreateWithCString(NULL, utf.data(), kCFStringEncodingUTF8);
+	if (!uid) {
+		return kAudioObjectUnknown;
+	}
+	AudioObjectPropertyAddress address = {
+		.mSelector = kAudioHardwarePropertyDeviceForUID,
+		.mScope = kAudioObjectPropertyScopeGlobal,
+		.mElement = kAudioObjectPropertyElementMaster,
+	};
+	AudioDeviceID deviceId = kAudioObjectUnknown;
+	UInt32 deviceSize = sizeof(deviceId);
 
-	AudioObjectGetPropertyData(
-		AudioObjectID(kAudioObjectSystemObject),
-		&AudioOutputDevicePropertyAddress,
+	AudioValueTranslation value;
+	value.mInputData = &uid;
+	value.mInputDataSize = sizeof(CFStringRef);
+	value.mOutputData = &deviceId;
+	value.mOutputDataSize = deviceSize;
+	UInt32 valueSize = sizeof(AudioValueTranslation);
+
+	OSStatus result = AudioObjectGetPropertyData(
+		kAudioObjectSystemObject,
+		&address,
 		0,
-		nil,
-		&deviceIdSize,
-		&deviceId);
-	return GetDeviceUID(deviceId);
+		0,
+		&valueSize,
+		&value);
+	CFRelease(uid);
+
+	return (result == noErr) ? deviceId : kAudioObjectUnknown;
 }
 
-[[nodiscard]] QString ResolveAudioInput(const QString &id) {
-	return id;
-}
-
-[[nodiscard]] QString ResolveAudioOutput(const QString &id) {
-	if (IsDefault(id)) {
-		const auto desired = ComputeDefaultAudioOutputId();
-		if (!desired.isEmpty()) {
-			return desired;
-		}
-	} else {
-		const auto utf = id.toUtf8();
-		auto uid = CFStringCreateWithCString(NULL, utf.data(), kCFStringEncodingUTF8);
-		if (uid) {
-			AudioObjectPropertyAddress address = {
-				.mSelector = kAudioHardwarePropertyDeviceForUID,
-				.mScope = kAudioObjectPropertyScopeGlobal,
-				.mElement = kAudioObjectPropertyElementMaster,
-			};
-			AudioDeviceID deviceId = kAudioObjectUnknown;
-			UInt32 deviceSize = sizeof(deviceId);
-
-			AudioValueTranslation value;
-			value.mInputData = &uid;
-			value.mInputDataSize = sizeof(CFStringRef);
-			value.mOutputData = &deviceId;
-			value.mOutputDataSize = deviceSize;
-			UInt32 valueSize = sizeof(AudioValueTranslation);
-
-			OSStatus result = AudioObjectGetPropertyData(
-				kAudioObjectSystemObject,
-				&address,
-				0,
-				0,
-				&valueSize,
-				&value);
-			CFRelease(uid);
-
-			if (result) {
-				return id; // Validated.
-			}
-		}
+[[nodiscard]] bool DeviceHasScope(
+		AudioDeviceID deviceId,
+		AudioObjectPropertyScope scope) {
+	UInt32 size = 0;
+	AudioObjectPropertyAddress address = {
+		.mSelector = kAudioDevicePropertyStreamConfiguration,
+		.mScope = scope,
+		.mElement = kAudioObjectPropertyElementMaster,
+	};
+	OSStatus result = AudioObjectGetPropertyDataSize(
+		deviceId,
+		&address,
+		0,
+		0,
+		&size);
+	if (result == kAudioHardwareBadDeviceError) {
+        // This device doesn't actually exist; continue iterating.
+		return false;
+	} else if (result != noErr) {
+		return false;
 	}
 
+	AudioBufferList *bufferList = (AudioBufferList*)malloc(size);
+	result = AudioObjectGetPropertyData(
+		deviceId,
+		&address,
+		0,
+		nil,
+		&size,
+		bufferList);
+	const auto good = (result == noErr) && (bufferList->mNumberBuffers > 0);
+	free(bufferList);
+	return good;
+}
+
+[[nodiscard]] std::vector<AudioDeviceID> GetAllDeviceIds() {
 	auto listSize = UInt32();
 	auto listAddress = AudioObjectPropertyAddress{
 		.mSelector = kAudioHardwarePropertyDevices,
@@ -140,19 +157,81 @@ OSStatus PropertyChangedCallback(
 		.mElement = kAudioObjectPropertyElementMaster,
 	};
 
-	AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &listAddress, 0, nil, &listSize);
+	OSStatus result = AudioObjectGetPropertyDataSize(
+		kAudioObjectSystemObject,
+		&listAddress,
+		0,
+		nil,
+		&listSize);
+	if (result != noErr) {
+		return {};
+	}
 
 	const auto count = listSize / sizeof(AudioDeviceID);
 	auto list = std::vector<AudioDeviceID>(count, kAudioDeviceUnknown);
 
-	AudioObjectGetPropertyData(kAudioObjectSystemObject, &listAddress, 0, nil, &listSize, list.data());
+	result = AudioObjectGetPropertyData(
+		kAudioObjectSystemObject,
+		&listAddress,
+		0,
+		nil,
+		&listSize,
+		list.data());
+	return (result == noErr) ? list : std::vector<AudioDeviceID>();
+}
 
-	for (const auto deviceId : list) {
-		if (const auto uid = GetDeviceUID(deviceId); !uid.isEmpty()) {
-			return uid;
+[[nodiscard]] QString ComputeDefaultAudioDevice(
+		AudioObjectPropertyScope scope) {
+	auto deviceId = AudioDeviceID(kAudioDeviceUnknown);
+	auto deviceIdSize = UInt32(sizeof(AudioDeviceID));
+	const auto address = (scope == kAudioDevicePropertyScopeInput)
+		? &AudioInputDevicePropertyAddress
+		: &AudioOutputDevicePropertyAddress;
+	AudioObjectGetPropertyData(
+		AudioObjectID(kAudioObjectSystemObject),
+		address,
+		0,
+		nil,
+		&deviceIdSize,
+		&deviceId);
+	return GetDeviceUID(deviceId);
+}
+
+[[nodiscard]] QString ResolveAudioDevice(
+		const QString &id,
+		AudioObjectPropertyScope scope) {
+	if (!IsDefault(id)) {
+		// Try to choose specific, if asked.
+		const auto deviceId = GetDeviceByUID(id);
+		if (deviceId != kAudioObjectUnknown
+			&& DeviceHasScope(deviceId, scope)) {
+			return id;
+		}
+	}
+
+	// Try to choose default.
+	const auto desired = ComputeDefaultAudioDevice(scope);
+	if (!desired.isEmpty()) {
+		return desired;
+	}
+
+	// Try to choose any.
+	for (const auto deviceId : GetAllDeviceIds()) {
+		if (DeviceHasScope(deviceId, scope)) {
+			if (const auto uid = GetDeviceUID(deviceId); !uid.isEmpty()) {
+				return uid;
+			}
 		}
 	}
 	return id;
+}
+
+[[nodiscard]] QString ResolveAudioInput(const QString &id) {
+	return ResolveAudioDevice(id, kAudioDevicePropertyScopeInput);
+}
+
+[[nodiscard]] QString ResolveAudioOutput(const QString &id) {
+	return ResolveAudioDevice(id, kAudioDevicePropertyScopeOutput);
 }
 
 [[nodiscard]] QString ResolveVideoInput(const QString &id) {
@@ -199,6 +278,7 @@ MacMediaDevices::MacMediaDevices(
 
 MacMediaDevices::~MacMediaDevices() {
 	clearAudioOutputCallbacks();
+	clearAudioInputCallbacks();
 }
 
 void MacMediaDevices::switchToAudioInput(QString id) {
@@ -226,7 +306,27 @@ void MacMediaDevices::switchToVideoInput(QString id) {
 }
 
 void MacMediaDevices::audioInputRefreshed() {
-	_resolvedAudioInputId = ResolveAudioInput(_audioInputId);
+	clearAudioInputCallbacks();
+	const auto refresh = [=] {
+		_resolvedAudioInputId = ResolveAudioInput(_audioInputId);
+	};
+	if (IsDefault(_audioInputId)) {
+		_defaultAudioInputChanged = refresh;
+		AudioObjectAddPropertyListener(
+			AudioObjectID(kAudioObjectSystemObject),
+			&AudioInputDevicePropertyAddress,
+			PropertyChangedCallback,
+			&_defaultAudioInputChanged);
+		_defaultAudioInputChanged();
+	} else {
+		_audioInputDevicesChanged = refresh;
+		AudioObjectAddPropertyListener(
+			AudioObjectID(kAudioObjectSystemObject),
+			&AudioDeviceListPropertyAddress,
+			PropertyChangedCallback,
+			&_audioInputDevicesChanged);
+	}
+	refresh();
 }
 
 void MacMediaDevices::audioOutputRefreshed() {
@@ -269,6 +369,25 @@ void MacMediaDevices::clearAudioOutputCallbacks() {
 			PropertyChangedCallback,
 			&_audioOutputDevicesChanged);
 		_audioOutputDevicesChanged = nullptr;
+	}
+}
+
+void MacMediaDevices::clearAudioInputCallbacks() {
+	if (_defaultAudioInputChanged) {
+		AudioObjectRemovePropertyListener(
+			AudioObjectID(kAudioObjectSystemObject),
+			&AudioInputDevicePropertyAddress,
+			PropertyChangedCallback,
+			&_defaultAudioInputChanged);
+		_defaultAudioInputChanged = nullptr;
+	}
+	if (_audioInputDevicesChanged) {
+		AudioObjectAddPropertyListener(
+			AudioObjectID(kAudioObjectSystemObject),
+			&AudioDeviceListPropertyAddress,
+			PropertyChangedCallback,
+			&_audioInputDevicesChanged);
+		_audioInputDevicesChanged = nullptr;
 	}
 }
 

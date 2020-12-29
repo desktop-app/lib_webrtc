@@ -6,6 +6,7 @@
 //
 #include "webrtc/webrtc_media_devices.h"
 
+#include "webrtc/details/webrtc_create_adm.h"
 #include "webrtc/mac/webrtc_media_devices_mac.h"
 #include "api/task_queue/default_task_queue_factory.h"
 #include "modules/video_capture/video_capture_factory.h"
@@ -97,10 +98,9 @@ std::vector<AudioInput> GetAudioInputList() {
 	auto result = std::vector<AudioInput>();
 	const auto resolve = [&] {
 		const auto queueFactory = webrtc::CreateDefaultTaskQueueFactory();
-		const auto info = webrtc::AudioDeviceModule::Create(
-			webrtc::AudioDeviceModule::kPlatformDefaultAudio,
+		const auto info = details::CreateAudioDeviceModule(
 			queueFactory.get());
-		if (!info || info->Init() < 0) {
+		if (!info) {
 			return;
 		}
 		const auto count = info->RecordingDevices();
@@ -113,11 +113,15 @@ std::vector<AudioInput> GetAudioInputList() {
 			info->RecordingDeviceName(i, name, id);
 			const auto utfName = QString::fromUtf8(name);
 			const auto utfId = id[0] ? QString::fromUtf8(id) : utfName;
-#ifdef WEBRTC_MAC
+#ifdef WEBRTC_WIN
+			if (utfName.startsWith("Default - ") || utfName.startsWith("Communication - ")) {
+				continue;
+			}
+#elif defined WEBRTC_MAC
 			if (utfName.startsWith("default (") && utfName.endsWith(")")) {
 				continue;
 			}
-#endif // WEBRTC_MAC
+#endif // WEBRTC_WIN || WEBRTC_MAC
 			result.push_back({
 				.id = utfId,
 				.name = utfName,
@@ -137,10 +141,9 @@ std::vector<AudioOutput> GetAudioOutputList() {
 	auto result = std::vector<AudioOutput>();
 	const auto resolve = [&] {
 		const auto queueFactory = webrtc::CreateDefaultTaskQueueFactory();
-		const auto info = webrtc::AudioDeviceModule::Create(
-			webrtc::AudioDeviceModule::kPlatformDefaultAudio,
+		const auto info = details::CreateAudioDeviceModule(
 			queueFactory.get());
-		if (!info || info->Init() < 0) {
+		if (!info) {
 			return;
 		}
 		const auto count = info->PlayoutDevices();
@@ -153,11 +156,15 @@ std::vector<AudioOutput> GetAudioOutputList() {
 			info->PlayoutDeviceName(i, name, id);
 			const auto utfName = QString::fromUtf8(name);
 			const auto utfId = id[0] ? QString::fromUtf8(id) : utfName;
-#ifdef WEBRTC_MAC
+#ifdef WEBRTC_WIN
+			if (utfName.startsWith("Default - ") || utfName.startsWith("Communication - ")) {
+				continue;
+			}
+#elif defined WEBRTC_MAC
 			if (utfName.startsWith("default (") && utfName.endsWith(")")) {
 				continue;
 			}
-#endif // WEBRTC_MAC
+#endif // WEBRTC_WIN || WEBRTC_MAC
 			result.push_back({
 				.id = utfId,
 				.name = utfName,

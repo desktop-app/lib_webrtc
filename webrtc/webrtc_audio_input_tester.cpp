@@ -6,6 +6,7 @@
 //
 #include "webrtc/webrtc_audio_input_tester.h"
 
+#include "webrtc/details/webrtc_create_adm.h"
 #include "media/engine/webrtc_media_engine.h"
 #include "api/task_queue/default_task_queue_factory.h"
 #include "crl/crl_object_on_thread.h"
@@ -70,10 +71,7 @@ AudioInputTester::Impl::Impl(
 	const std::shared_ptr<std::atomic<int>> &maxSample)
 : _maxSample(std::move(maxSample))
 , _taskQueueFactory(webrtc::CreateDefaultTaskQueueFactory())
-, _adm(
-	webrtc::AudioDeviceModule::Create(
-		webrtc::AudioDeviceModule::kPlatformDefaultAudio,
-		_taskQueueFactory.get())) {
+, _adm(details::CreateAudioDeviceModule(_taskQueueFactory.get())) {
 	init();
 	setDeviceId(deviceId);
 }
@@ -98,14 +96,18 @@ void AudioInputTester::Impl::setDeviceId(const QString &deviceId) {
 	if (!_adm) {
 		return;
 	}
+	auto specific = false;
 	_adm->StopRecording();
 	const auto guard = gsl::finally([&] {
-		_adm->InitRecording();
-		_adm->StartRecording();
+		if (!specific) {
+			_adm->SetRecordingDevice(
+				webrtc::AudioDeviceModule::kDefaultCommunicationDevice);
+		}
+		if (_adm->InitRecording() == 0) {
+			_adm->StartRecording();
+		}
 	});
 	if (deviceId == u"default"_q || deviceId.isEmpty()) {
-		_adm->SetRecordingDevice(
-			webrtc::AudioDeviceModule::kDefaultCommunicationDevice);
 		return;
 	}
 	const auto count = _adm
@@ -119,7 +121,9 @@ void AudioInputTester::Impl::setDeviceId(const QString &deviceId) {
 		char guid[webrtc::kAdmMaxGuidSize + 1] = { 0 };
 		_adm->RecordingDeviceName(i, name, guid);
 		if (deviceId == guid) {
-			_adm->SetRecordingDevice(i);
+			if (_adm->SetRecordingDevice(i) == 0) {
+				specific = true;
+			}
 			return;
 		}
 	}

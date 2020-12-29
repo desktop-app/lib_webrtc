@@ -24,6 +24,9 @@ PRIVATE
     webrtc/mac/webrtc_media_devices_mac.h
     webrtc/mac/webrtc_media_devices_mac.mm
 
+    webrtc/details/webrtc_create_adm.cpp
+    webrtc/details/webrtc_create_adm.h
+
     webrtc/webrtc_pch.h
 )
 

@@ -15,6 +15,8 @@ nice_target_sources(lib_webrtc ${src_loc}
 PRIVATE
     webrtc/webrtc_audio_input_tester.cpp
     webrtc/webrtc_audio_input_tester.h
+    webrtc/webrtc_create_adm.cpp
+    webrtc/webrtc_create_adm.h
     webrtc/webrtc_media_devices.cpp
     webrtc/webrtc_media_devices.h
     webrtc/webrtc_video_track.cpp
@@ -24,8 +26,10 @@ PRIVATE
     webrtc/mac/webrtc_media_devices_mac.h
     webrtc/mac/webrtc_media_devices_mac.mm
 
-    webrtc/details/webrtc_create_adm.cpp
-    webrtc/details/webrtc_create_adm.h
+    webrtc/details/webrtc_openal_adm.cpp
+    webrtc/details/webrtc_openal_adm.h
+    webrtc/details/webrtc_openal_input.cpp
+    webrtc/details/webrtc_openal_input.h
 
     webrtc/webrtc_pch.h
 )
@@ -61,4 +65,5 @@ PUBLIC
     desktop-app::lib_base
     desktop-app::lib_ffmpeg
     desktop-app::external_qt
+    desktop-app::external_openal
 )

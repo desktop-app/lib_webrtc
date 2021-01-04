@@ -6,7 +6,7 @@
 //
 #include "webrtc/webrtc_audio_input_tester.h"
 
-#include "webrtc/details/webrtc_create_adm.h"
+#include "webrtc/webrtc_create_adm.h"
 #include "media/engine/webrtc_media_engine.h"
 #include "api/task_queue/default_task_queue_factory.h"
 #include "crl/crl_object_on_thread.h"
@@ -71,7 +71,7 @@ AudioInputTester::Impl::Impl(
 	const std::shared_ptr<std::atomic<int>> &maxSample)
 : _maxSample(std::move(maxSample))
 , _taskQueueFactory(webrtc::CreateDefaultTaskQueueFactory())
-, _adm(details::CreateAudioDeviceModule(_taskQueueFactory.get())) {
+, _adm(CreateAudioDeviceModule(_taskQueueFactory.get())) {
 	init();
 	setDeviceId(deviceId);
 }

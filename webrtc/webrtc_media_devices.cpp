@@ -6,7 +6,7 @@
 //
 #include "webrtc/webrtc_media_devices.h"
 
-#include "webrtc/details/webrtc_create_adm.h"
+#include "webrtc/webrtc_create_adm.h"
 #include "webrtc/mac/webrtc_media_devices_mac.h"
 #include "api/task_queue/default_task_queue_factory.h"
 #include "modules/video_capture/video_capture_factory.h"
@@ -98,8 +98,7 @@ std::vector<AudioInput> GetAudioInputList() {
 	auto result = std::vector<AudioInput>();
 	const auto resolve = [&] {
 		const auto queueFactory = webrtc::CreateDefaultTaskQueueFactory();
-		const auto info = details::CreateAudioDeviceModule(
-			queueFactory.get());
+		const auto info = CreateAudioDeviceModule(queueFactory.get());
 		if (!info) {
 			return;
 		}
@@ -141,8 +140,7 @@ std::vector<AudioOutput> GetAudioOutputList() {
 	auto result = std::vector<AudioOutput>();
 	const auto resolve = [&] {
 		const auto queueFactory = webrtc::CreateDefaultTaskQueueFactory();
-		const auto info = details::CreateAudioDeviceModule(
-			queueFactory.get());
+		const auto info = CreateAudioDeviceModule(queueFactory.get());
 		if (!info) {
 			return;
 		}

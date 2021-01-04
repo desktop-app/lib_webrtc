@@ -6,15 +6,19 @@
 //
 #pragma once
 
-#include "modules/audio_device/include/audio_device.h"
-
 namespace webrtc {
+class AudioDeviceModule;
 class TaskQueueFactory;
-} // namespace webrtc
+}
+
+namespace rtc {
+template <class T>
+class scoped_refptr;
+}
 
 namespace Webrtc::details {
 
-rtc::scoped_refptr<webrtc::AudioDeviceModule> CreateAudioDeviceModule(
-	webrtc::TaskQueueFactory* task_queue_factory);
+rtc::scoped_refptr<webrtc::AudioDeviceModule> CreateAudioDeviceModuleOpenAL(
+	webrtc::TaskQueueFactory *taskQueueFactory);
 
 } // namespace Webrtc::details

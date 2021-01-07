@@ -10,6 +10,8 @@
 
 namespace Webrtc {
 
+enum class Backend;
+
 struct VideoInput {
 	QString id;
 	QString name;
@@ -22,14 +24,14 @@ struct AudioInput {
 	QString name;
 };
 
-[[nodiscard]] std::vector<AudioInput> GetAudioInputList();
+[[nodiscard]] std::vector<AudioInput> GetAudioInputList(Backend backend);
 
 struct AudioOutput {
 	QString id;
 	QString name;
 };
 
-[[nodiscard]] std::vector<AudioOutput> GetAudioOutputList();
+[[nodiscard]] std::vector<AudioOutput> GetAudioOutputList(Backend backend);
 
 class MediaDevices {
 public:

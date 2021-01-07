@@ -10,9 +10,13 @@
 
 namespace Webrtc {
 
+enum class Backend;
+
 class AudioInputTester {
 public:
-	explicit AudioInputTester(const QString &deviceId);
+	AudioInputTester(
+		const Backend &backend,
+		const QString &deviceId);
 	~AudioInputTester();
 
 	void setDeviceId(const QString &deviceId);

@@ -94,11 +94,13 @@ std::vector<VideoInput> GetVideoInputList() {
 #endif // WEBRTC_MAC
 }
 
-std::vector<AudioInput> GetAudioInputList() {
+std::vector<AudioInput> GetAudioInputList(Backend backend) {
 	auto result = std::vector<AudioInput>();
 	const auto resolve = [&] {
 		const auto queueFactory = webrtc::CreateDefaultTaskQueueFactory();
-		const auto info = CreateAudioDeviceModule(queueFactory.get());
+		const auto info = CreateAudioDeviceModule(
+			queueFactory.get(),
+			backend);
 		if (!info) {
 			return;
 		}
@@ -136,11 +138,13 @@ std::vector<AudioInput> GetAudioInputList() {
 	return result;
 }
 
-std::vector<AudioOutput> GetAudioOutputList() {
+std::vector<AudioOutput> GetAudioOutputList(Backend backend) {
 	auto result = std::vector<AudioOutput>();
 	const auto resolve = [&] {
 		const auto queueFactory = webrtc::CreateDefaultTaskQueueFactory();
-		const auto info = CreateAudioDeviceModule(queueFactory.get());
+		const auto info = CreateAudioDeviceModule(
+			queueFactory.get(),
+			backend);
 		if (!info) {
 			return;
 		}

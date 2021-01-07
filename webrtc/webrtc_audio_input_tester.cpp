@@ -17,6 +17,7 @@ namespace Webrtc {
 class AudioInputTester::Impl : public webrtc::AudioTransport {
 public:
 	Impl(
+		const Backend &backend,
 		const QString &deviceId,
 		const std::shared_ptr<std::atomic<int>> &maxSample);
 	~Impl();
@@ -67,11 +68,12 @@ private:
 };
 
 AudioInputTester::Impl::Impl(
+	const Backend &backend,
 	const QString &deviceId,
 	const std::shared_ptr<std::atomic<int>> &maxSample)
 : _maxSample(std::move(maxSample))
 , _taskQueueFactory(webrtc::CreateDefaultTaskQueueFactory())
-, _adm(CreateAudioDeviceModule(_taskQueueFactory.get())) {
+, _adm(CreateAudioDeviceModule(_taskQueueFactory.get(), backend)) {
 	init();
 	setDeviceId(deviceId);
 }
@@ -179,9 +181,11 @@ void AudioInputTester::Impl::PullRenderData(int bits_per_sample,
 		int64_t* ntp_time_ms) {
 }
 
-AudioInputTester::AudioInputTester(const QString &deviceId)
+AudioInputTester::AudioInputTester(
+	const Backend &backend,
+	const QString &deviceId)
 : _maxSample(std::make_shared<std::atomic<int>>(0))
-, _impl(deviceId, std::as_const(_maxSample)) {
+, _impl(backend, deviceId, std::as_const(_maxSample)) {
 }
 
 AudioInputTester::~AudioInputTester() = default;

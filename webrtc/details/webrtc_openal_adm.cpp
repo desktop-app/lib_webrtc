@@ -8,6 +8,7 @@
 
 #include "base/timer.h"
 #include "base/invoke_queued.h"
+#include <crl/crl_semaphore.h>
 
 #undef emit
 #undef slots

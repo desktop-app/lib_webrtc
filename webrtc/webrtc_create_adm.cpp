@@ -8,6 +8,7 @@
 
 #include "webrtc/details/webrtc_openal_adm.h"
 
+#include "rtc_base/ref_counted_object.h"
 #include "modules/audio_device/include/audio_device_factory.h"
 
 namespace Webrtc {
@@ -21,7 +22,7 @@ rtc::scoped_refptr<webrtc::AudioDeviceModule> CreateAudioDeviceModule(
 			const rtc::scoped_refptr<webrtc::AudioDeviceModule> &result) {
 		return (result && (result->Init() == 0)) ? result : nullptr;
 	};
-	if (auto result = check(details::CreateAudioDeviceModuleOpenAL(factory))) {
+	if (auto result = check(new rtc::RefCountedObject<details::AudioDeviceOpenAL>(factory))) {
 		return result;
 	}
 #ifdef WEBRTC_WIN

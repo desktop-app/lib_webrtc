@@ -28,8 +28,6 @@ PRIVATE
 
     webrtc/details/webrtc_openal_adm.cpp
     webrtc/details/webrtc_openal_adm.h
-    webrtc/details/webrtc_openal_input.cpp
-    webrtc/details/webrtc_openal_input.h
 
     webrtc/webrtc_pch.h
 )

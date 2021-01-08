@@ -216,7 +216,6 @@ AudioDeviceOpenAL::~AudioDeviceOpenAL() {
 	Terminate();
 }
 
-
 int32_t AudioDeviceOpenAL::ActiveAudioLayer(AudioLayer *audioLayer) const {
 	*audioLayer = kPlatformDefaultAudio;
 	return 0;
@@ -248,6 +247,8 @@ int32_t AudioDeviceOpenAL::Terminate() {
 	StopRecording();
 	StopPlayout();
 	_initialized = false;
+
+	Ensures(!_data);
 	return 0;
 }
 
@@ -799,11 +800,14 @@ void AudioDeviceOpenAL::startCaptureOnThread() {
 void AudioDeviceOpenAL::stopCaptureOnThread() {
 	Expects(_data != nullptr);
 
-	if (!_data->recording || _recordingFailed) {
+	if (!_data->recording) {
 		return;
 	}
 	sync([&] {
 		_data->recording = false;
+		if (_recordingFailed) {
+			return;
+		}
 		if (!_data->playing) {
 			_data->timer.cancel();
 		}
@@ -863,11 +867,14 @@ void AudioDeviceOpenAL::startPlayingOnThread() {
 void AudioDeviceOpenAL::stopPlayingOnThread() {
 	Expects(_data != nullptr);
 
-	if (!_data->playing || _playoutFailed) {
+	if (!_data->playing) {
 		return;
 	}
 	sync([&] {
 		_data->playing = false;
+		if (_playoutFailed) {
+			return;
+		}
 		if (!_data->recording) {
 			_data->timer.cancel();
 		}

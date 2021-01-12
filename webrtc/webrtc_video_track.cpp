@@ -446,7 +446,12 @@ QImage VideoTrack::frame(const FrameRequest &request) {
 }
 
 QSize VideoTrack::frameSize() const {
-	return _sink->frameForPaint()->original.size();
+	const auto frame = _sink->frameForPaint();
+	const auto size = frame->original.size();
+	const auto rotation = frame->rotation;
+	return (rotation == 90 || rotation == 270)
+		? QSize(size.height(), size.width())
+		: size;
 }
 
 void VideoTrack::PrepareFrameByRequests(
@@ -454,6 +459,7 @@ void VideoTrack::PrepareFrameByRequests(
 		int rotation) {
 	Expects(!frame->original.isNull());
 
+	frame->rotation = rotation;
 	if (frame->alpha
 		|| !GoodForRequest(frame->original, rotation, frame->request)) {
 		frame->prepared = PrepareByRequest(

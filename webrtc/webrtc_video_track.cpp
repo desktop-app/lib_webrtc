@@ -417,7 +417,7 @@ QImage VideoTrack::frame(const FrameRequest &request) {
 	if (_disabledFrom > 0
 		&& (_disabledFrom + kDropFramesWhileInactive > crl::now())) {
 		_sink->destroyFrameForPaint();
-		return QImage();
+		return {};
 	}
 	const auto frame = _sink->frameForPaint();
 	const auto preparedFor = frame->request;
@@ -443,6 +443,16 @@ QImage VideoTrack::frame(const FrameRequest &request) {
 			std::move(frame->prepared));
 	}
 	return frame->prepared;
+}
+
+std::pair<QImage, int> VideoTrack::frameOriginalWithRotation() const {
+	if (_disabledFrom > 0
+		&& (_disabledFrom + kDropFramesWhileInactive > crl::now())) {
+		_sink->destroyFrameForPaint();
+		return {};
+	}
+	const auto frame = _sink->frameForPaint();
+	return { frame->original, frame->rotation };
 }
 
 QSize VideoTrack::frameSize() const {

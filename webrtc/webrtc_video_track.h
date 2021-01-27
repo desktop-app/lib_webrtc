@@ -69,6 +69,7 @@ public:
 
 	void markFrameShown();
 	[[nodiscard]] QImage frame(const FrameRequest &request);
+	[[nodiscard]] std::pair<QImage, int> frameOriginalWithRotation() const;
 	[[nodiscard]] QSize frameSize() const;
 	[[nodiscard]] rpl::producer<> renderNextFrame() const;
 	[[nodiscard]] auto sink()

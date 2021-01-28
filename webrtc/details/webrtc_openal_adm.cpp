@@ -992,7 +992,7 @@ void AudioDeviceOpenAL::closePlayoutDevice() {
 		_playoutContext = nullptr;
 	}
 	if (_playoutDevice) {
-		alcCaptureCloseDevice(_playoutDevice);
+		alcCloseDevice(_playoutDevice);
 		_playoutDevice = nullptr;
 	}
 }

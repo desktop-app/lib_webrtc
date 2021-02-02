@@ -21,7 +21,6 @@ PRIVATE
     webrtc/webrtc_media_devices.h
     webrtc/webrtc_video_track.cpp
     webrtc/webrtc_video_track.h
-    webrtc/webrtc_video_track_dummy.cpp
 
     webrtc/mac/webrtc_media_devices_mac.h
     webrtc/mac/webrtc_media_devices_mac.mm
@@ -44,24 +43,12 @@ PUBLIC
     ${src_loc}
 )
 
-if (DESKTOP_APP_DISABLE_WEBRTC_INTEGRATION)
-    remove_target_sources(lib_webrtc ${src_loc}
-        webrtc/webrtc_video_track.cpp
-    )
-else()
-    remove_target_sources(lib_webrtc ${src_loc}
-        webrtc/webrtc_video_track_dummy.cpp
-    )
-    target_link_libraries(lib_webrtc
-    PRIVATE
-        desktop-app::external_webrtc
-    )
-endif()
-
 target_link_libraries(lib_webrtc
 PUBLIC
     desktop-app::lib_base
     desktop-app::lib_ffmpeg
     desktop-app::external_qt
     desktop-app::external_openal
+PRIVATE
+    desktop-app::external_webrtc
 )

@@ -886,6 +886,7 @@ void AudioDeviceOpenAL::stopPlayingOnThread() {
 			_data->source = 0;
 			ranges::fill(_data->buffers, ALuint(0));
 		}
+		alcSetThreadContext(nullptr);
 	});
 }
 

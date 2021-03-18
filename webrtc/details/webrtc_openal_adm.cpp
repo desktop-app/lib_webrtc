@@ -867,10 +867,16 @@ void AudioDeviceOpenAL::startPlayingOnThread() {
 void AudioDeviceOpenAL::stopPlayingOnThread() {
 	Expects(_data != nullptr);
 
-	if (!_data->playing) {
-		return;
-	}
 	sync([&] {
+		const auto guard = gsl::finally([&] {
+			if (alEventCallbackSOFT) {
+				alEventCallbackSOFT(nullptr, nullptr);
+			}
+			alcSetThreadContext(nullptr);
+		});
+		if (!_data->playing) {
+			return;
+		}
 		_data->playing = false;
 		if (_playoutFailed) {
 			return;
@@ -886,7 +892,6 @@ void AudioDeviceOpenAL::stopPlayingOnThread() {
 			_data->source = 0;
 			ranges::fill(_data->buffers, ALuint(0));
 		}
-		alcSetThreadContext(nullptr);
 	});
 }
 

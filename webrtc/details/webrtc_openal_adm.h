@@ -126,7 +126,11 @@ private:
 	void openRecordingDevice();
 	void openPlayoutDevice();
 	void closeRecordingDevice();
+
+	// NB! stopPlayingOnThread should be called before this,
+	// to clear the thread local context and event callback.
 	void closePlayoutDevice();
+
 	int restartPlayout();
 	int restartRecording();
 	void restartRecordingQueued();
@@ -138,6 +142,9 @@ private:
 	void startCaptureOnThread();
 	void stopCaptureOnThread();
 	void startPlayingOnThread();
+
+	// NB! closePlayoutDevice should be called after this, so that next time
+	// we start playing, we set the thread local context and event callback.
 	void stopPlayingOnThread();
 
 	void processData();

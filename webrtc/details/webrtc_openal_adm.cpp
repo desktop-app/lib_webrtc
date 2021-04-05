@@ -556,7 +556,7 @@ void AudioDeviceOpenAL::handleEvent(
 		ALuint param,
 		ALsizei length,
 		const ALchar *message) {
-	if (eventType == kAL_EVENT_TYPE_DISCONNECTED_SOFT) {
+	if (eventType == kAL_EVENT_TYPE_DISCONNECTED_SOFT && _thread) {
 		const auto weak = QPointer<QObject>(&_data->context);
 		_thread->PostTask(RTC_FROM_HERE, [=] {
 			if (weak) {
@@ -585,6 +585,10 @@ void AudioDeviceOpenAL::ensureThreadStarted() {
 		return;
 	}
 	_thread = rtc::Thread::Current();
+	if (_thread && !_thread->IsOwned()) {
+		_thread->UnwrapCurrent();
+		_thread = nullptr;
+	}
 	//	Assert(_thread != nullptr);
 	//	Assert(_thread->IsOwned());
 
@@ -913,7 +917,7 @@ int32_t AudioDeviceOpenAL::StopRecording() {
 void AudioDeviceOpenAL::restartRecordingQueued() {
 	Expects(_data != nullptr);
 
-	if (!_thread || !_thread->IsOwned()) {
+	if (!_thread) {
 		// We support auto-restarting only when started from rtc::Thread.
 		return;
 	}
@@ -950,7 +954,7 @@ int AudioDeviceOpenAL::restartRecording() {
 void AudioDeviceOpenAL::restartPlayoutQueued() {
 	Expects(_data != nullptr);
 
-	if (!_thread || !_thread->IsOwned()) {
+	if (!_thread) {
 		// We support auto-restarting only when started from rtc::Thread.
 		return;
 	}

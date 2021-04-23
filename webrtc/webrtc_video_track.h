@@ -23,6 +23,8 @@ class VideoFrame;
 
 namespace Webrtc {
 
+using SinkInterface = rtc::VideoSinkInterface<webrtc::VideoFrame>;
+
 struct FrameRequest {
 	QSize resize;
 	QSize outer;
@@ -72,8 +74,7 @@ public:
 	[[nodiscard]] std::pair<QImage, int> frameOriginalWithRotation() const;
 	[[nodiscard]] QSize frameSize() const;
 	[[nodiscard]] rpl::producer<> renderNextFrame() const;
-	[[nodiscard]] auto sink()
-		-> std::shared_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>>;
+	[[nodiscard]] std::shared_ptr<SinkInterface> sink();
 
 	[[nodiscard]] VideoState state() const;
 	[[nodiscard]] rpl::producer<VideoState> stateValue() const;
@@ -100,5 +101,8 @@ private:
 	crl::time _disabledFrom = 0;
 	rpl::variable<VideoState> _state;
 };
+
+[[nodiscard]] std::shared_ptr<SinkInterface> CreateProxySink(
+	std::shared_ptr<SinkInterface> sink);
 
 } // namespace Webrtc

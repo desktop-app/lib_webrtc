@@ -481,26 +481,4 @@ void VideoTrack::PrepareFrameByRequests(
 	}
 }
 
-std::shared_ptr<SinkInterface> CreateProxySink(
-		std::shared_ptr<SinkInterface> sink) {
-	class Proxy final : public SinkInterface {
-	public:
-		explicit Proxy(std::shared_ptr<SinkInterface> sink) : _sink(sink) {
-		}
-
-		void OnFrame(const webrtc::VideoFrame &frame) override {
-			_sink->OnFrame(frame);
-		}
-
-		void OnDiscardedFrame() override {
-			_sink->OnDiscardedFrame();
-		}
-
-	private:
-		std::shared_ptr<SinkInterface> _sink;
-
-	};
-	return std::make_shared<Proxy>(std::move(sink));
-}
-
 } // namespace Webrtc

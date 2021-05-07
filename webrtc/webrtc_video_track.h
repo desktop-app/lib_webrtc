@@ -102,7 +102,4 @@ private:
 	rpl::variable<VideoState> _state;
 };
 
-[[nodiscard]] std::shared_ptr<SinkInterface> CreateProxySink(
-	std::shared_ptr<SinkInterface> sink);
-
 } // namespace Webrtc

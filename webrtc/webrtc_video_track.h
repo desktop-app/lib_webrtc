@@ -63,6 +63,12 @@ enum class VideoState {
 	Active,
 };
 
+struct FrameWithInfo {
+	QImage original;
+	int rotation = 0;
+	int index = -1;
+};
+
 class VideoTrack final {
 public:
 	// Called from the main thread.
@@ -71,7 +77,7 @@ public:
 
 	void markFrameShown();
 	[[nodiscard]] QImage frame(const FrameRequest &request);
-	[[nodiscard]] std::pair<QImage, int> frameOriginalWithRotation() const;
+	[[nodiscard]] FrameWithInfo frameWithInfo() const;
 	[[nodiscard]] QSize frameSize() const;
 	[[nodiscard]] rpl::producer<> renderNextFrame() const;
 	[[nodiscard]] std::shared_ptr<SinkInterface> sink();

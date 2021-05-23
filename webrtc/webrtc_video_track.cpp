@@ -171,11 +171,17 @@ public:
 	using PrepareFrame = not_null<Frame*>;
 	using PrepareState = bool;
 
+	struct FrameWithIndex {
+		not_null<Frame*> frame;
+		int index = -1;
+	};
+
 	[[nodiscard]] bool firstPresentHappened() const;
 
 	// Called from the main thread.
 	void markFrameShown();
 	[[nodiscard]] not_null<Frame*> frameForPaint();
+	[[nodiscard]] FrameWithIndex frameForPaintWithIndex();
 	[[nodiscard]] rpl::producer<> renderNextFrameOnMain() const;
 	void destroyFrameForPaint();
 
@@ -352,7 +358,12 @@ bool VideoTrack::Sink::firstPresentHappened() const {
 }
 
 not_null<VideoTrack::Frame*> VideoTrack::Sink::frameForPaint() {
-	return getFrame(counter() / 2);
+	return frameForPaintWithIndex().frame;
+}
+
+VideoTrack::Sink::FrameWithIndex VideoTrack::Sink::frameForPaintWithIndex() {
+	const auto index = counter() / 2;
+	return { .frame = getFrame(index), .index = index };
 }
 
 void VideoTrack::Sink::destroyFrameForPaint() {
@@ -445,14 +456,18 @@ QImage VideoTrack::frame(const FrameRequest &request) {
 	return frame->prepared;
 }
 
-std::pair<QImage, int> VideoTrack::frameOriginalWithRotation() const {
+FrameWithInfo VideoTrack::frameWithInfo() const {
 	if (_disabledFrom > 0
 		&& (_disabledFrom + kDropFramesWhileInactive > crl::now())) {
 		_sink->destroyFrameForPaint();
 		return {};
 	}
-	const auto frame = _sink->frameForPaint();
-	return { frame->original, frame->rotation };
+	const auto data = _sink->frameForPaintWithIndex();
+	return {
+		.original = data.frame->original,
+		.rotation = data.frame->rotation,
+		.index = data.index,
+	};
 }
 
 QSize VideoTrack::frameSize() const {

@@ -164,10 +164,26 @@ QImage PrepareByRequest(
 
 } // namespace
 
+struct VideoTrack::Frame {
+	QImage original;
+	QImage prepared;
+	rtc::scoped_refptr<webrtc::I420BufferInterface> native;
+	FrameYUV420 yuv420;
+	FrameRequest request = FrameRequest::NonStrict();
+	FrameFormat format = FrameFormat::None;
+
+	int rotation = 0;
+	bool displayed = false;
+	bool alpha = false;
+	bool requireARGB32 = true;
+};
+
 class VideoTrack::Sink final
 	: public rtc::VideoSinkInterface<webrtc::VideoFrame>
 	, public std::enable_shared_from_this<Sink> {
 public:
+	explicit Sink(bool requireARGB32);
+
 	using PrepareFrame = not_null<Frame*>;
 	using PrepareState = bool;
 
@@ -214,6 +230,12 @@ private:
 
 };
 
+VideoTrack::Sink::Sink(bool requireARGB32) {
+	for (auto &frame : _frames) {
+		frame.requireARGB32 = requireARGB32;
+	}
+}
+
 void VideoTrack::Sink::OnFrame(const webrtc::VideoFrame &nativeVideoFrame) {
 	const auto decode = nextFrameForDecode();
 	if (decodeFrame(nativeVideoFrame, decode.frame)) {
@@ -257,8 +279,28 @@ bool VideoTrack::Sink::decodeFrame(
 	const auto native = nativeVideoFrame.video_frame_buffer()->ToI420();
 	const auto size = QSize{ native->width(), native->height() };
 	if (size.isEmpty()) {
+		frame->format = FrameFormat::None;
 		return false;
 	}
+	if (!frame->requireARGB32) {
+		if (!frame->original.isNull()) {
+			frame->original = frame->prepared = QImage();
+		}
+		frame->format = FrameFormat::YUV420;
+		frame->native = native;
+		frame->yuv420 = FrameYUV420{
+			.size = size,
+			.chromaSize = { native->ChromaWidth(), native->ChromaHeight() },
+			.y = { native->DataY(), native->StrideY() },
+			.u = { native->DataU(), native->StrideU() },
+			.v = { native->DataV(), native->StrideV() },
+		};
+		return true;
+	}
+	frame->format = FrameFormat::ARGB32;
+	frame->yuv420 = FrameYUV420{
+		.size = size,
+	};
 	if (!FFmpeg::GoodStorageForFrame(frame->original, size)) {
 		frame->original = FFmpeg::CreateFrameStorage(size);
 	}
@@ -371,14 +413,20 @@ void VideoTrack::Sink::destroyFrameForPaint() {
 	if (!frame->original.isNull()) {
 		frame->original = frame->prepared = QImage();
 	}
+	if (frame->native) {
+		frame->native = nullptr;
+		frame->yuv420 = FrameYUV420();
+	}
+	frame->format = FrameFormat::None;
 }
 
 rpl::producer<> VideoTrack::Sink::renderNextFrameOnMain() const {
 	return _renderNextFrameOnMain.events();
 }
 
-VideoTrack::VideoTrack(VideoState state) : _state(state) {
-	_sink = std::make_shared<Sink>();
+VideoTrack::VideoTrack(VideoState state, bool requireARGB32)
+: _state(state) {
+	_sink = std::make_shared<Sink>(requireARGB32);
 }
 
 VideoTrack::~VideoTrack() {
@@ -456,15 +504,23 @@ QImage VideoTrack::frame(const FrameRequest &request) {
 	return frame->prepared;
 }
 
-FrameWithInfo VideoTrack::frameWithInfo() const {
+FrameWithInfo VideoTrack::frameWithInfo(bool requireARGB32) const {
 	if (_disabledFrom > 0
 		&& (_disabledFrom + kDropFramesWhileInactive > crl::now())) {
 		_sink->destroyFrameForPaint();
 		return {};
 	}
 	const auto data = _sink->frameForPaintWithIndex();
+	Assert(!requireARGB32
+		|| (data.frame->format == FrameFormat::ARGB32)
+		|| (data.frame->format == FrameFormat::None));
+	if (data.frame->requireARGB32 && !requireARGB32) {
+		data.frame->requireARGB32 = requireARGB32;
+	}
 	return {
 		.original = data.frame->original,
+		.yuv420 = &data.frame->yuv420,
+		.format = data.frame->format,
 		.rotation = data.frame->rotation,
 		.index = data.index,
 	};
@@ -472,7 +528,7 @@ FrameWithInfo VideoTrack::frameWithInfo() const {
 
 QSize VideoTrack::frameSize() const {
 	const auto frame = _sink->frameForPaint();
-	const auto size = frame->original.size();
+	const auto size = frame->yuv420.size;
 	const auto rotation = frame->rotation;
 	return (rotation == 90 || rotation == 270)
 		? QSize(size.height(), size.width())
@@ -482,9 +538,13 @@ QSize VideoTrack::frameSize() const {
 void VideoTrack::PrepareFrameByRequests(
 		not_null<Frame*> frame,
 		int rotation) {
-	Expects(!frame->original.isNull());
+	Expects(frame->format != FrameFormat::ARGB32
+		|| !frame->original.isNull());
 
 	frame->rotation = rotation;
+	if (frame->format != FrameFormat::ARGB32) {
+		return;
+	}
 	if (frame->alpha
 		|| !GoodForRequest(frame->original, rotation, frame->request)) {
 		frame->prepared = PrepareByRequest(

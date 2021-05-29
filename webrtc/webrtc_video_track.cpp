@@ -223,6 +223,9 @@ private:
 
 	std::atomic<int> _counter = 0;
 
+	// Main thread.
+	int _counterCycle = 0;
+
 	static constexpr auto kFramesCount = 3;
 	std::array<Frame, kFramesCount> _frames;
 
@@ -255,9 +258,9 @@ auto VideoTrack::Sink::nextFrameForDecode() -> FrameForDecode {
 void VideoTrack::Sink::presentNextFrame(const FrameForDecode &frame) {
 	// Release this frame to the main thread for rendering.
 	const auto present = [&](int counter) {
-		_counter.store(
-			(counter + 1) % (2 * kFramesCount),
-			std::memory_order_release);
+		Expects(counter + 1 < 2 * kFramesCount);
+
+		_counter.store(counter + 1, std::memory_order_release);
 		notifyFrameDecoded();
 	};
 	switch (frame.counter) {
@@ -359,7 +362,7 @@ not_null<VideoTrack::Frame*> VideoTrack::Sink::getFrame(int index) {
 }
 
 not_null<const VideoTrack::Frame*> VideoTrack::Sink::getFrame(
-	int index) const {
+		int index) const {
 	Expects(index >= 0 && index < kFramesCount);
 
 	return &_frames[index];
@@ -377,6 +380,9 @@ bool VideoTrack::Sink::firstPresentHappened() const {
 
  void VideoTrack::Sink::markFrameShown() {
 	const auto jump = [&](int counter) {
+		if (counter == 2 * kFramesCount - 1) {
+			++_counterCycle;
+		}
 		const auto next = (counter + 1) % (2 * kFramesCount);
 		const auto index = next / 2;
 		const auto frame = getFrame(index);
@@ -405,7 +411,10 @@ not_null<VideoTrack::Frame*> VideoTrack::Sink::frameForPaint() {
 
 VideoTrack::Sink::FrameWithIndex VideoTrack::Sink::frameForPaintWithIndex() {
 	const auto index = counter() / 2;
-	return { .frame = getFrame(index), .index = index };
+	return {
+		.frame = getFrame(index),
+		.index = (_counterCycle * 2 * kFramesCount) + index,
+	};
 }
 
 void VideoTrack::Sink::destroyFrameForPaint() {

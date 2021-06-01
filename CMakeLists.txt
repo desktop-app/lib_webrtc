@@ -22,6 +22,9 @@ PRIVATE
     webrtc/webrtc_video_track.cpp
     webrtc/webrtc_video_track.h
 
+    webrtc/linux/webrtc_media_devices_linux.h
+    webrtc/linux/webrtc_media_devices_linux.cpp
+
     webrtc/mac/webrtc_media_devices_mac.h
     webrtc/mac/webrtc_media_devices_mac.mm
 

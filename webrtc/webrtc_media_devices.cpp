@@ -8,12 +8,12 @@
 
 #include "webrtc/webrtc_create_adm.h"
 #include "webrtc/mac/webrtc_media_devices_mac.h"
+#include "webrtc/linux/webrtc_media_devices_linux.h"
 #include "api/task_queue/default_task_queue_factory.h"
 #include "modules/video_capture/video_capture_factory.h"
 #include "modules/audio_device/include/audio_device_factory.h"
 #include "base/platform/base_platform_info.h"
 #include "crl/crl_async.h"
-//#include "media/engine/webrtc_media_engine.h"
 
 namespace Webrtc {
 namespace {
@@ -191,6 +191,14 @@ std::unique_ptr<MediaDevices> CreateMediaDevices(
 #else // WEBRTC_MAC
 	return std::make_unique<MediaDevicesSimple>(audioInput, audioOutput, videoInput);
 #endif
+}
+
+std::optional<QString> UniqueDesktopCaptureSource() {
+#ifdef WEBRTC_LINUX
+	return LinuxUniqueDesktopCaptureSource();
+#else // WEBRTC_LINUX
+	return std::nullopt;
+#endif // WEBRTC_LINUX
 }
 
 } // namespace Webrtc

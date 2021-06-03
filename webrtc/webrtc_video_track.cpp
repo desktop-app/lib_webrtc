@@ -424,8 +424,8 @@ void VideoTrack::Sink::destroyFrameForPaint() {
 	}
 	if (frame->native) {
 		frame->native = nullptr;
-		frame->yuv420 = FrameYUV420();
 	}
+	frame->yuv420 = FrameYUV420();
 	frame->format = FrameFormat::None;
 }
 
@@ -536,6 +536,11 @@ FrameWithInfo VideoTrack::frameWithInfo(bool requireARGB32) const {
 }
 
 QSize VideoTrack::frameSize() const {
+	if (_disabledFrom > 0
+		&& (_disabledFrom + kDropFramesWhileInactive > crl::now())) {
+		_sink->destroyFrameForPaint();
+		return {};
+	}
 	const auto frame = _sink->frameForPaint();
 	const auto size = frame->yuv420.size;
 	const auto rotation = frame->rotation;

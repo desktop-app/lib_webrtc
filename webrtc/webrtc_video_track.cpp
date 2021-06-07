@@ -465,13 +465,13 @@ auto VideoTrack::sink()
 }
 
 void VideoTrack::setState(VideoState state) {
-	if (state == VideoState::Active) {
-		_disabledFrom = 0;
+	if (state == VideoState::Inactive) {
+		_inactiveFrom = crl::now();
 	} else {
-		_disabledFrom = crl::now();
+		_inactiveFrom = 0;
 	}
 	_state = state;
-	if (state != VideoState::Active) {
+	if (state == VideoState::Inactive) {
 		// save last frame?..
 		_sink->destroyFrameForPaint();
 	}
@@ -482,8 +482,8 @@ void VideoTrack::markFrameShown() {
 }
 
 QImage VideoTrack::frame(const FrameRequest &request) {
-	if (_disabledFrom > 0
-		&& (_disabledFrom + kDropFramesWhileInactive > crl::now())) {
+	if (_inactiveFrom > 0
+		&& (_inactiveFrom + kDropFramesWhileInactive > crl::now())) {
 		_sink->destroyFrameForPaint();
 		return {};
 	}
@@ -514,8 +514,8 @@ QImage VideoTrack::frame(const FrameRequest &request) {
 }
 
 FrameWithInfo VideoTrack::frameWithInfo(bool requireARGB32) const {
-	if (_disabledFrom > 0
-		&& (_disabledFrom + kDropFramesWhileInactive > crl::now())) {
+	if (_inactiveFrom > 0
+		&& (_inactiveFrom + kDropFramesWhileInactive > crl::now())) {
 		_sink->destroyFrameForPaint();
 		return {};
 	}
@@ -536,8 +536,8 @@ FrameWithInfo VideoTrack::frameWithInfo(bool requireARGB32) const {
 }
 
 QSize VideoTrack::frameSize() const {
-	if (_disabledFrom > 0
-		&& (_disabledFrom + kDropFramesWhileInactive > crl::now())) {
+	if (_inactiveFrom > 0
+		&& (_inactiveFrom + kDropFramesWhileInactive > crl::now())) {
 		_sink->destroyFrameForPaint();
 		return {};
 	}

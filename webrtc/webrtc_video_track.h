@@ -115,7 +115,7 @@ private:
 	static void PrepareFrameByRequests(not_null<Frame*> frame, int rotation);
 
 	std::shared_ptr<Sink> _sink;
-	crl::time _disabledFrom = 0;
+	crl::time _inactiveFrom = 0;
 	rpl::variable<VideoState> _state;
 };
 

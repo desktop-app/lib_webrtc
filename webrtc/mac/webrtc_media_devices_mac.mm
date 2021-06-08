@@ -9,6 +9,7 @@
 #include "modules/audio_device/include/audio_device_defines.h"
 
 #import <AVFoundation/AVFoundation.h>
+#import <IOKit/hidsystem/IOHIDLib.h>
 
 namespace Webrtc {
 namespace {
@@ -393,6 +394,16 @@ void MacMediaDevices::clearAudioInputCallbacks() {
 
 void MacMediaDevices::videoInputRefreshed() {
 	_resolvedVideoInputId = ResolveVideoInput(_videoInputId);
+}
+
+bool MacDesktopCaptureAllowed() {
+	if (@available(macOS 10.15, *)) {
+		// Screen Recording is required on macOS 10.15 an later.
+		// Even if user grants access, restart is required.
+		static const auto result = CGPreflightScreenCaptureAccess();
+		return result;
+	}
+	return true;
 }
 
 } // namespace Webrtc

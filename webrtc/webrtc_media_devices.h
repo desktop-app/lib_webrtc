@@ -52,6 +52,7 @@ public:
 	QString audioOutput,
 	QString videoInput);
 
+[[nodiscard]] bool DesktopCaptureAllowed();
 [[nodiscard]] std::optional<QString> UniqueDesktopCaptureSource();
 
 } // namespace Webrtc

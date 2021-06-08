@@ -193,6 +193,14 @@ std::unique_ptr<MediaDevices> CreateMediaDevices(
 #endif
 }
 
+bool DesktopCaptureAllowed() {
+#ifdef WEBRTC_MAC
+	return MacDesktopCaptureAllowed();
+#else // WEBRTC_MAC
+	return true;
+#endif // WEBRTC_MAC
+}
+
 std::optional<QString> UniqueDesktopCaptureSource() {
 #ifdef WEBRTC_LINUX
 	return LinuxUniqueDesktopCaptureSource();

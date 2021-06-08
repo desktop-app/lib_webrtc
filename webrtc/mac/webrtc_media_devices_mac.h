@@ -56,4 +56,6 @@ private:
 
 };
 
+[[nodiscard]] bool MacDesktopCaptureAllowed();
+
 } // namespace Webrtc

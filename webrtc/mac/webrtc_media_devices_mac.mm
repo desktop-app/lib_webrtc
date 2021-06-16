@@ -397,11 +397,29 @@ void MacMediaDevices::videoInputRefreshed() {
 }
 
 bool MacDesktopCaptureAllowed() {
-	if (@available(macOS 10.15, *)) {
+	if (@available(macOS 11.0, *)) {
 		// Screen Recording is required on macOS 10.15 an later.
 		// Even if user grants access, restart is required.
 		static const auto result = CGPreflightScreenCaptureAccess();
 		return result;
+	} else if (@available(macOS 10.15, *)) {
+		const auto stream = CGDisplayStreamCreate(
+			CGMainDisplayID(),
+			1,
+			1,
+			kCVPixelFormatType_32BGRA,
+			CFDictionaryRef(),
+			^(
+				CGDisplayStreamFrameStatus status,
+				uint64_t display_time,
+				IOSurfaceRef frame_surface,
+				CGDisplayStreamUpdateRef updateRef) {
+			});
+		if (!stream) {
+			return false;
+		}
+		CFRelease(stream);
+		return true;
 	}
 	return true;
 }

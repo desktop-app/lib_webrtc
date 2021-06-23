@@ -16,7 +16,7 @@
 #include "crl/crl_async.h"
 
 #ifdef WEBRTC_MAC
-#define MAC_TRACK_MEDIA_DEVICES
+//#define MAC_TRACK_MEDIA_DEVICES
 #endif // WEBRTC_MAC
 
 namespace Webrtc {

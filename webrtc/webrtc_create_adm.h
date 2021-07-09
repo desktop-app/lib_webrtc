@@ -34,4 +34,10 @@ AudioDeviceModulePtr CreateAudioDeviceModule(
 auto AudioDeviceModuleCreator(Backend backend)
 -> std::function<AudioDeviceModulePtr(webrtc::TaskQueueFactory*)>;
 
+AudioDeviceModulePtr CreateLoopbackAudioDeviceModule(
+	webrtc::TaskQueueFactory* factory);
+
+auto LoopbackAudioDeviceModuleCreator()
+-> std::function<AudioDeviceModulePtr(webrtc::TaskQueueFactory*)>;
+
 } // namespace Webrtc

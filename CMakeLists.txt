@@ -22,19 +22,28 @@ PRIVATE
     webrtc/webrtc_video_track.cpp
     webrtc/webrtc_video_track.h
 
-    webrtc/linux/webrtc_media_devices_linux.h
+    webrtc/details/webrtc_openal_adm.cpp
+    webrtc/details/webrtc_openal_adm.h
+
     webrtc/linux/webrtc_media_devices_linux.cpp
+    webrtc/linux/webrtc_media_devices_linux.h
 
     webrtc/mac/webrtc_media_devices_mac.h
     webrtc/mac/webrtc_media_devices_mac.mm
 
-    webrtc/details/webrtc_openal_adm.cpp
-    webrtc/details/webrtc_openal_adm.h
+    webrtc/win/webrtc_loopback_adm_win.cpp
+    webrtc/win/webrtc_loopback_adm_win.h
 
     webrtc/webrtc_pch.h
 )
 
-if (APPLE)
+if (WIN32)
+    target_compile_definitions(lib_webrtc
+    PRIVATE
+        WEBRTC_WIN
+    )
+    nuget_add_winrt(lib_webrtc)
+elseif (APPLE)
     target_compile_definitions(lib_webrtc
     PRIVATE
         WEBRTC_MAC

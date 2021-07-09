@@ -11,6 +11,10 @@
 #include "rtc_base/ref_counted_object.h"
 #include "modules/audio_device/include/audio_device_factory.h"
 
+#ifdef WEBRTC_WIN
+#include "webrtc/win/webrtc_loopback_adm_win.h"
+#endif // WEBRTC_WIN
+
 namespace Webrtc {
 
 rtc::scoped_refptr<webrtc::AudioDeviceModule> CreateAudioDeviceModule(
@@ -53,6 +57,27 @@ auto AudioDeviceModuleCreator(Backend backend)
 	return [=](webrtc::TaskQueueFactory *factory) {
 		return CreateAudioDeviceModule(factory, backend);
 	};
+}
+
+AudioDeviceModulePtr CreateLoopbackAudioDeviceModule(
+		webrtc::TaskQueueFactory* factory) {
+	const auto check = [&](
+			const rtc::scoped_refptr<webrtc::AudioDeviceModule> &result) {
+		return (result && (result->Init() == 0)) ? result : nullptr;
+	};
+#ifdef WEBRTC_WIN
+	auto result = rtc::scoped_refptr<webrtc::AudioDeviceModule>(
+		new rtc::RefCountedObject<details::AudioDeviceLoopbackWin>(factory));
+	if (result->Init() == 0) {
+		return result;
+	}
+#endif // WEBRTC_WIN
+	return nullptr;
+}
+
+auto LoopbackAudioDeviceModuleCreator()
+-> std::function<AudioDeviceModulePtr(webrtc::TaskQueueFactory*)> {
+	return CreateLoopbackAudioDeviceModule;
 }
 
 } // namespace Webrtc

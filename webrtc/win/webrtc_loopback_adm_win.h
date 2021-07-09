@@ -9,9 +9,10 @@
 #include "modules/audio_device/include/audio_device.h"
 #include "modules/audio_device/audio_device_buffer.h"
 
-#include <al.h>
-#include <alc.h>
-#include <atomic>
+#include <AudioClient.h>
+#include <MMDeviceAPI.h>
+
+#include <winrt/base.h>
 
 namespace rtc {
 class Thread;
@@ -19,10 +20,10 @@ class Thread;
 
 namespace Webrtc::details {
 
-class AudioDeviceOpenAL : public webrtc::AudioDeviceModule {
+class AudioDeviceLoopbackWin : public webrtc::AudioDeviceModule {
 public:
-	explicit AudioDeviceOpenAL(webrtc::TaskQueueFactory *taskQueueFactory);
-	~AudioDeviceOpenAL();
+	explicit AudioDeviceLoopbackWin(webrtc::TaskQueueFactory *taskQueueFactory);
+	~AudioDeviceLoopbackWin();
 
 	int32_t ActiveAudioLayer(AudioLayer *audioLayer) const override;
 	int32_t RegisterAudioCallback(
@@ -117,69 +118,50 @@ public:
 	int32_t EnableBuiltInNS(bool enable) override;
 
 private:
-	struct Data;
-
-	template <typename Callback>
-	std::invoke_result_t<Callback> sync(Callback &&callback);
+	void openPlaybackDeviceForCapture();
+	void openAudioClient();
 
 	void openRecordingDevice();
-	void openPlayoutDevice();
 	void closeRecordingDevice();
 
-	// NB! stopPlayingOnThread should be called before this,
-	// to clear the thread local context and event callback.
-	void closePlayoutDevice();
+	void captureFailed(const std::string &error);
 
-	int restartPlayout();
-	int restartRecording();
-	void restartRecordingQueued();
-	void restartPlayoutQueued();
-	bool validateRecordingDeviceId();
-	bool validatePlayoutDeviceId();
-
-	void ensureThreadStarted();
 	void startCaptureOnThread();
 	void stopCaptureOnThread();
-	void startPlayingOnThread();
-
-	// NB! closePlayoutDevice should be called after this, so that next time
-	// we start playing, we set the thread local context and event callback.
-	void stopPlayingOnThread();
-
 	void processData();
-	void processRecordingData();
-	void processPlayoutData();
-	bool processRecordedPart(bool firstInCycle);
 
-	void clearProcessedBuffers();
-	bool clearProcessedBuffer();
-	void unqueueAllBuffers();
+	static DWORD WINAPI CaptureThreadMethod(LPVOID context);
+	DWORD runCaptureThread();
 
-	void handleEvent(
-		ALenum eventType,
-		ALuint object,
-		ALuint param,
-		ALsizei length,
-		const ALchar *message);
-
-	rtc::Thread *_thread = nullptr;
 	webrtc::AudioDeviceBuffer _audioDeviceBuffer;
-	std::unique_ptr<Data> _data;
 
-	ALCdevice *_playoutDevice = nullptr;
-	ALCcontext *_playoutContext = nullptr;
-	std::string _playoutDeviceId;
-	bool _playoutInitialized = false;
-	bool _playoutFailed = false;
+	winrt::com_ptr<IMMDevice> _endpointDevice;
+	winrt::com_ptr<IAudioClient> _audioClient;
+	winrt::com_ptr<IAudioClient> _audioRenderClientForLoopback;
+	winrt::com_ptr<IAudioCaptureClient> _audioCaptureClient;
 
-	ALCdevice *_recordingDevice = nullptr;
-	std::string _recordingDeviceId;
-	bool _recordingInitialized = false;
-	bool _recordingFailed = false;
+	HANDLE _thread = nullptr;
+	HANDLE _audioSamplesReadyEvent = nullptr;
+	HANDLE _captureThreadShutdownEvent = nullptr;
 
-	bool _speakerInitialized = false;
+	UINT32 _bufferSizeFrames = 0;
+	UINT32 _frameSize = 0;
+	UINT32 _captureFrequency = 0;
+	UINT32 _captureChannels = 0;
+	UINT32 _capturePartFrames = 0;
+	QByteArray _syncBuffer;
+	UINT32 _syncBufferOffset = 0;
+	int _readSamples = 0;
+
+	QByteArray _resampleBuffer;
+	bool _resampleFrom32 = false;
+
 	bool _microphoneInitialized = false;
 	bool _initialized = false;
+
+	bool _recordingInitialized = false;
+	bool _recordingFailed = false;
+	bool _recording = false;
 
 };
 

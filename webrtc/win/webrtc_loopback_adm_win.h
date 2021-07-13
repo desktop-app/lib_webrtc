@@ -14,6 +14,8 @@
 
 #include <winrt/base.h>
 
+typedef struct SwrContext SwrContext;
+
 namespace rtc {
 class Thread;
 } // namespace rtc
@@ -143,6 +145,15 @@ private:
 	void stopCaptureOnThread();
 	void processData();
 
+	bool setupResampler(const WAVEFORMATEX &format);
+	bool setupResampler(
+		int channels,
+		uint64 channelLayout,
+		int inputFormat, // AVSampleFormat
+		int sampleRate,
+		Fn<std::string()> info);
+	void ensureResampleSpaceAvailable(int samples);
+
 	static DWORD WINAPI CaptureThreadMethod(LPVOID context);
 	DWORD runCaptureThread();
 
@@ -162,20 +173,16 @@ private:
 	HANDLE _captureThreadShutdownEvent = nullptr;
 
 	UINT32 _bufferSizeFrames = 0;
-	UINT32 _frameSize = 0;
-	UINT32 _captureFrequency = 0;
-	UINT32 _captureChannels = 0;
-	UINT32 _capturePartFrames = 0;
-	QByteArray _syncBuffer;
-	UINT32 _syncBufferOffset = 0;
+	UINT32 _deviceFrameSize = 0;
+	QByteArray _deviceBuffer;
+	QByteArray _resampleBuffer;
+	UINT32 _bufferOffset = 0;
 
 	double _queryPerformanceMultiplier = 0.;
-	double _captureFrequencyMultiplier = 0.;
+	double _deviceFrequencyMultiplier = 0.;
 
-	int _readSamples = 0;
-
-	QByteArray _resampleBuffer;
-	bool _resampleFrom32 = false;
+	SwrContext *_swrContext = nullptr;
+	int _swrSrcSampleRate = 0;
 
 	bool _microphoneInitialized = false;
 	bool _initialized = false;

@@ -11,13 +11,22 @@
 #include "modules/audio_processing/include/audio_frame_proxies.h"
 #include "api/audio/audio_frame.h"
 
+extern "C" {
+#include <libswresample/swresample.h>
+} // extern "C"
+
 namespace Webrtc::details {
 namespace {
+
+constexpr auto kMinFrequency = 3000;
+constexpr auto kMaxFrequency = 768000;
 
 constexpr auto kWantedFrequency = 48000;
 constexpr auto kWantedChannels = 2;
 constexpr auto kBufferSizeMs = crl::time(10);
 constexpr auto kWantedBitsPerSample = 16;
+constexpr auto kWantedFrameSize = kWantedChannels * kWantedBitsPerSample / 8;
+constexpr auto kWantedPartSize = kWantedFrequency * kBufferSizeMs / 1000;
 constexpr auto kProcessInterval = crl::time(10);
 
 constexpr auto kFarEndFrequency = 48000;
@@ -52,10 +61,6 @@ struct FarEnd {
 std::atomic<bool> LoopbackCaptureActive/* = false*/;
 FarEnd LoopbackFarEnd/* = { .. 0 .. }*/;
 
-[[nodiscard]] int PartSize(int frequency) {
-	return (frequency * kBufferSizeMs + 999) / 1000;
-}
-
 void SetStringToArray(const std::string &string, char *array, int size) {
 	const auto length = std::min(int(string.size()), size - 1);
 	if (length > 0) {
@@ -74,6 +79,65 @@ void SetStringToArray(const std::string &string, char *array, int size) {
 	config.echo_canceller.mobile_mode = true;
 	result->ApplyConfig(config);
 	return result;
+}
+
+[[nodiscard]] uint64 DefaultChannelLayout(int channels) {
+	return (channels == 1)
+		? AV_CH_LAYOUT_MONO
+		: AV_CH_LAYOUT_STEREO;
+}
+
+[[nodiscard]] uint64 ChannelLayout(DWORD channelMask) {
+	switch (channelMask) {
+	case KSAUDIO_SPEAKER_MONO: return AV_CH_LAYOUT_MONO;
+	case KSAUDIO_SPEAKER_STEREO: return AV_CH_LAYOUT_STEREO;
+	case KSAUDIO_SPEAKER_2POINT1: return AV_CH_LAYOUT_2POINT1;
+	case KSAUDIO_SPEAKER_3POINT1: return AV_CH_LAYOUT_3POINT1;
+	case KSAUDIO_SPEAKER_QUAD: return AV_CH_LAYOUT_QUAD;
+	case KSAUDIO_SPEAKER_SURROUND: return AV_CH_LAYOUT_SURROUND;
+	case KSAUDIO_SPEAKER_5POINT0: return AV_CH_LAYOUT_5POINT0;
+	case KSAUDIO_SPEAKER_5POINT1_BACK: return AV_CH_LAYOUT_5POINT1_BACK;
+	case KSAUDIO_SPEAKER_7POINT0: return AV_CH_LAYOUT_7POINT0;
+	case KSAUDIO_SPEAKER_7POINT1_WIDE: return AV_CH_LAYOUT_7POINT1_WIDE;
+	case KSAUDIO_SPEAKER_5POINT1_SURROUND: return AV_CH_LAYOUT_5POINT1;
+	case KSAUDIO_SPEAKER_7POINT1_SURROUND: return AV_CH_LAYOUT_7POINT1;
+	}
+	return 0;
+}
+
+[[nodiscard]] AVSampleFormat InputFormatPcm(int bitsPerSample) {
+	return (bitsPerSample == 8)
+		? AV_SAMPLE_FMT_U8
+		: (bitsPerSample == 16)
+		? AV_SAMPLE_FMT_S16
+		: AV_SAMPLE_FMT_S32;
+}
+
+[[nodiscard]] AVSampleFormat InputFormatFloat(int bitsPerSample) {
+	return (bitsPerSample == 32) ? AV_SAMPLE_FMT_FLT : AV_SAMPLE_FMT_DBL;
+}
+
+[[nodiscard]] std::string Serialize(const WAVEFORMATEX &format) {
+	return "EX{ wFormatTag: " + std::to_string(format.wFormatTag) + ", "
+		+ "nChannels: " + std::to_string(format.nChannels) + ", "
+		+ "nSamplesPerSec: " + std::to_string(format.nSamplesPerSec) + ", "
+		+ "nAvgBytesPerSec: " + std::to_string(format.nAvgBytesPerSec) + ", "
+		+ "nBlockAlign: " + std::to_string(format.nBlockAlign) + ", "
+		+ "wBitsPerSample: " + std::to_string(format.wBitsPerSample) + ", "
+		+ "cbSize: " + std::to_string(format.cbSize) + " }";
+}
+
+[[nodiscard]] std::string Serialize(const WAVEFORMATEXTENSIBLE &format) {
+	auto subformat = (OLECHAR*)nullptr;
+	StringFromCLSID(format.SubFormat, &subformat);
+	const auto guard = gsl::finally([&] { ::CoTaskMemFree(subformat); });
+
+	return "EXTENSIBLE{ Format: " + Serialize(format.Format) + ", "
+		+ ("Samples.wValidBitsPerSample: "
+			+ std::to_string(format.Samples.wValidBitsPerSample) + ", ")
+		+ "dwChannelMask: " + std::to_string(format.dwChannelMask) + ", "
+		+ ("SubFormat: "
+			+ QString::fromWCharArray(subformat).toStdString() + " }");
 }
 
 } // namespace
@@ -450,29 +514,20 @@ void AudioDeviceLoopbackWin::openAudioClient() {
 	}
 	auto hr = HRESULT();
 
-	//WAVEFORMATEXTENSIBLE inputFormat{};
+	WAVEFORMATEXTENSIBLE inputFormat{};
 
-	//const auto format = &inputFormat.Format;
-	//format->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-	//format->nChannels = kWantedChannels;
-	//format->nSamplesPerSec = kWantedFrequency;
-	//format->wBitsPerSample = kWantedBitsPerSample;
-	//format->nBlockAlign = (format->wBitsPerSample / 8) * format->nChannels;
-	//format->nAvgBytesPerSec = format->nSamplesPerSec * format->nBlockAlign;
+	const auto format = &inputFormat.Format;
+	format->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+	format->nChannels = kWantedChannels;
+	format->nSamplesPerSec = kWantedFrequency;
+	format->wBitsPerSample = kWantedBitsPerSample;
+	format->nBlockAlign = kWantedFrameSize;
+	format->nAvgBytesPerSec = format->nSamplesPerSec * format->nBlockAlign;
 
-	//format->cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
-	//inputFormat.Samples.wValidBitsPerSample = format->wBitsPerSample;
-	//inputFormat.dwChannelMask = KSAUDIO_SPEAKER_MONO;
-	//inputFormat.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
-	WAVEFORMATEX inputFormat{};
-
-	inputFormat.wFormatTag = WAVE_FORMAT_PCM;
-	inputFormat.wBitsPerSample = 16;
-	inputFormat.cbSize = 0;
-	inputFormat.nChannels = kWantedChannels;
-	inputFormat.nSamplesPerSec = kWantedFrequency;
-	inputFormat.nBlockAlign = inputFormat.nChannels * inputFormat.wBitsPerSample / 8;
-	inputFormat.nAvgBytesPerSec = inputFormat.nSamplesPerSec * inputFormat.nBlockAlign;
+	format->cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+	inputFormat.Samples.wValidBitsPerSample = format->wBitsPerSample;
+	inputFormat.dwChannelMask = KSAUDIO_SPEAKER_STEREO;
+	inputFormat.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
 
 	hr = _endpointDevice->Activate(
 		__uuidof(IAudioClient),
@@ -499,20 +554,17 @@ void AudioDeviceLoopbackWin::openAudioClient() {
 	} else if (hr != S_OK) {
 		if (!closestMatch) {
 			return captureFailed("Bad result in IsFormatSupported.");
+		} else if (!setupResampler(*closestMatch)) {
+			return;
 		}
 	} else if (closestMatch) {
 		CoTaskMemFree(closestMatch);
 		closestMatch = nullptr;
 	}
-	const auto finalFormat = closestMatch ? closestMatch : &inputFormat;
+	const auto finalFormat = closestMatch ? closestMatch : &inputFormat.Format;
 
-	_frameSize = finalFormat->nBlockAlign;
-	_captureFrequency = finalFormat->nSamplesPerSec;
-	_captureFrequencyMultiplier = 10'000'000. / _captureFrequency;
-	_captureChannels = finalFormat->nChannels;
-	_capturePartFrames = PartSize(_captureFrequency);
-
-	_resampleFrom32 = (finalFormat->wBitsPerSample == 32);
+	_deviceFrameSize = finalFormat->nBlockAlign;
+	_deviceFrequencyMultiplier = 10'000'000. / finalFormat->nSamplesPerSec;
 
 	auto flags = DWORD()
 		| AUDCLNT_STREAMFLAGS_LOOPBACK
@@ -565,6 +617,115 @@ void AudioDeviceLoopbackWin::openAudioClient() {
 	}
 }
 
+bool AudioDeviceLoopbackWin::setupResampler(const WAVEFORMATEX &format) {
+	if (format.nBlockAlign != format.nChannels * format.wBitsPerSample / 8
+		|| format.nSamplesPerSec < kMinFrequency
+		|| format.nSamplesPerSec > kMaxFrequency) {
+		captureFailed("Bad closest match fields: " + Serialize(format));
+		return false;
+	} else if (format.wFormatTag == WAVE_FORMAT_PCM
+		&& (format.nChannels == 1 || format.nChannels == 2)
+		&& (format.wBitsPerSample == 8
+			|| format.wBitsPerSample == 16
+			|| format.wBitsPerSample == 32)) {
+		return setupResampler(
+			format.nChannels,
+			DefaultChannelLayout(format.nChannels),
+			InputFormatPcm(format.wBitsPerSample),
+			format.nSamplesPerSec,
+			[&] { return Serialize(format); });
+	} else if (format.wFormatTag != WAVE_FORMAT_EXTENSIBLE
+		|| format.cbSize < sizeof(WAVEFORMATEXTENSIBLE) - sizeof(format)) {
+		captureFailed("Bad closest match format: " + Serialize(format));
+		return false;
+	}
+	const auto &ext = reinterpret_cast<const WAVEFORMATEXTENSIBLE&>(format);
+	if (ext.Samples.wValidBitsPerSample != format.wBitsPerSample) {
+		captureFailed("Bad closest match fields: " + Serialize(ext));
+		return false;
+	} else if (ext.SubFormat == KSDATAFORMAT_SUBTYPE_PCM
+		&& (format.wBitsPerSample == 8
+			|| format.wBitsPerSample == 16
+			|| format.wBitsPerSample == 32)) {
+		const auto channelLayout = ChannelLayout(ext.dwChannelMask);
+		if (!channelLayout) {
+			captureFailed("Bad channel layout: " + Serialize(ext));
+		}
+		return setupResampler(
+			format.nChannels,
+			channelLayout,
+			InputFormatPcm(format.wBitsPerSample),
+			format.nSamplesPerSec,
+			[&] { return Serialize(ext); });
+	} else if (ext.SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
+		&& (format.wBitsPerSample == 32 || format.wBitsPerSample == 64)) {
+		const auto channelLayout = ChannelLayout(ext.dwChannelMask);
+		if (!channelLayout) {
+			captureFailed("Bad channel layout: " + Serialize(ext));
+		}
+		return setupResampler(
+			format.nChannels,
+			channelLayout,
+			InputFormatFloat(format.wBitsPerSample),
+			format.nSamplesPerSec,
+			[&] { return Serialize(ext); });
+	}
+	captureFailed("Unknown subformat: " + Serialize(ext));
+	return false;
+}
+
+bool AudioDeviceLoopbackWin::setupResampler(
+		int channels,
+		uint64 channelLayout,
+		int inputFormat, // AVSampleFormat
+		int sampleRate,
+		Fn<std::string()> info) {
+	const auto dstChannelLayout = AV_CH_LAYOUT_STEREO;
+	const auto dstSampleFormat = AV_SAMPLE_FMT_S16;
+	const auto dstSampleRate = kWantedFrequency;
+	const auto srcChannelLayout = channelLayout;
+	const auto srcSampleFormat = AVSampleFormat(inputFormat);
+	const auto srcSampleRate = sampleRate;
+	_swrContext = swr_alloc_set_opts(
+		_swrContext,
+		dstChannelLayout,
+		dstSampleFormat,
+		dstSampleRate,
+		srcChannelLayout,
+		srcSampleFormat,
+		srcSampleRate,
+		0,
+		nullptr);
+	auto result = 0;
+	if (!_swrContext) {
+		captureFailed("Could not allocate resampler: " + info());
+		return false;
+	} else if ((result = swr_init(_swrContext)) < 0) {
+		char err[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+		captureFailed("Could not init resampler, error "
+			+ std::to_string(result)
+			+ "(" + av_make_error_string(err, sizeof(err), result) + "): "
+			+ info());
+		return false;
+	}
+	_swrSrcSampleRate = srcSampleRate;
+	return true;
+}
+
+void AudioDeviceLoopbackWin::ensureResampleSpaceAvailable(int samples) {
+	Expects(_swrContext != nullptr);
+
+	const auto allocate = std::max(samples, int(av_rescale_rnd(
+		kWantedPartSize,
+		kWantedFrequency,
+		_swrSrcSampleRate,
+		AV_ROUND_UP)));
+	const auto bytes = allocate * kWantedFrameSize;
+	if (_resampleBuffer.size() < _bufferOffset + bytes) {
+		_resampleBuffer.resize(_bufferOffset + bytes);
+	}
+}
+
 void AudioDeviceLoopbackWin::openRecordingDevice() {
 	if (_audioCaptureClient) {
 		return;
@@ -589,13 +750,13 @@ int32_t AudioDeviceLoopbackWin::InitRecording() {
 	}
 	_recordingInitialized = true;
 	openRecordingDevice();
-	_audioDeviceBuffer.SetRecordingSampleRate(_captureFrequency);
-	_audioDeviceBuffer.SetRecordingChannels(_captureChannels);
+	_audioDeviceBuffer.SetRecordingSampleRate(kWantedFrequency);
+	_audioDeviceBuffer.SetRecordingChannels(kWantedChannels);
 
 	_capturedFrame = std::make_unique<webrtc::AudioFrame>();
-	_capturedFrame->sample_rate_hz_ = _captureFrequency;
-	_capturedFrame->num_channels_ = _captureChannels;
-	_capturedFrame->samples_per_channel_ = _capturePartFrames;
+	_capturedFrame->sample_rate_hz_ = kWantedFrequency;
+	_capturedFrame->num_channels_ = kWantedChannels;
+	_capturedFrame->samples_per_channel_ = kWantedPartSize;
 
 	_renderedFrame = std::make_unique<webrtc::AudioFrame>();
 	_renderedFrame->sample_rate_hz_ = kFarEndFrequency;
@@ -633,6 +794,7 @@ void AudioDeviceLoopbackWin::processData() {
 		&flags,
 		&position,
 		&counter);
+	const auto now = crl::now();
 
 	if (FAILED(hr)) {
 		captureFailed("Failed call to IAudioCaptureClient::GetBuffer.");
@@ -657,24 +819,14 @@ void AudioDeviceLoopbackWin::processData() {
 			? double(counter)
 			: result;
 	}();
-	const auto now = crl::now();
-	const auto whenCaptured = [&] {
-		const auto fullDelay = (nowCounter - double(counter))
-			+ ((_readSamples - int(framesAvailable))
-				* _captureFrequencyMultiplier);
-		return now - crl::time(std::round(fullDelay / 10'000.));
-	};
 
+	const auto deviceData = _swrContext
+		? _deviceBuffer.data()
+		: (_deviceBuffer.data() + _bufferOffset);
 	if (data) {
-		memcpy(
-			_syncBuffer.data() + _syncBufferOffset,
-			data,
-			framesAvailable * _frameSize);
+		memcpy(deviceData, data, framesAvailable * _deviceFrameSize);
 	} else {
-		memset(
-			_syncBuffer.data() + _syncBufferOffset,
-			0,
-			framesAvailable * _frameSize);
+		memset(deviceData, 0, framesAvailable * _deviceFrameSize);
 	}
 
 	hr = _audioCaptureClient->ReleaseBuffer(framesAvailable);
@@ -683,10 +835,56 @@ void AudioDeviceLoopbackWin::processData() {
 		return;
 	}
 
-	_readSamples += framesAvailable;
-	_syncBufferOffset += framesAvailable * _frameSize;
+	if (_swrContext) {
+		const auto maxSamples = av_rescale_rnd(
+			swr_get_delay(_swrContext, _swrSrcSampleRate) + framesAvailable,
+			kWantedFrequency,
+			_swrSrcSampleRate,
+			AV_ROUND_UP);
+		ensureResampleSpaceAvailable(maxSamples);
+		auto srcData = reinterpret_cast<const uint8_t*>(
+			_deviceBuffer.constData());
+		auto dstData = reinterpret_cast<uint8_t*>(
+			_resampleBuffer.data() + _bufferOffset);
+		const auto samples = swr_convert(
+			_swrContext,
+			&dstData,
+			maxSamples,
+			&srcData,
+			framesAvailable);
+		if (samples < 0) {
+			char err[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+			captureFailed("Could not resample, error "
+				+ std::to_string(samples)
+				+ " (" + av_make_error_string(err, sizeof(err), samples) + ").");
+			return;
+		}
+		_bufferOffset += samples * kWantedFrameSize;
+	} else {
+		_bufferOffset += framesAvailable * kWantedFrameSize;
+	}
 
-	while (_readSamples >= _capturePartFrames) {
+	const auto samplesPointer = _swrContext
+		? _resampleBuffer.constData()
+		: _deviceBuffer.constData();
+	auto samplesAvailable = _bufferOffset / kWantedFrameSize;
+
+	const auto whenCaptured = [&] {
+		const auto deviceSamplesCount = _swrContext
+			? av_rescale_rnd(
+				_bufferOffset / kWantedFrameSize,
+				_swrSrcSampleRate,
+				kWantedFrequency,
+				AV_ROUND_UP)
+			: samplesAvailable;
+		const auto deviceSamplesBefore = deviceSamplesCount - framesAvailable;
+		const auto fullDelay = (nowCounter - double(counter))
+			+ (deviceSamplesBefore * _deviceFrequencyMultiplier);
+		return now - crl::time(std::round(fullDelay / 10'000.));
+	};
+
+	while (samplesAvailable >= kWantedPartSize) {
+		const auto bytesToProcess = kWantedPartSize * kWantedFrameSize;
 		const auto delay = LoopbackCaptureTakeFarEnd(
 			*_renderedFrame,
 			whenCaptured());
@@ -709,27 +907,33 @@ void AudioDeviceLoopbackWin::processData() {
 
 			memcpy(
 				_capturedFrame->mutable_data(),
-				_syncBuffer.constData(),
-				_capturePartFrames * _frameSize);
+				samplesPointer,
+				bytesToProcess);
 			webrtc::ProcessAudioFrame(
 				_audioProcessing.get(),
 				_capturedFrame.get());
 			_audioDeviceBuffer.SetRecordedBuffer(
 				_capturedFrame->data(),
-				_capturePartFrames);
+				kWantedPartSize);
 		} else {
 			_audioDeviceBuffer.SetRecordedBuffer(
-				_syncBuffer.constData(),
-				_capturePartFrames);
+				samplesPointer,
+				kWantedPartSize);
 		}
 		_audioDeviceBuffer.DeliverRecordedData();
 
-		memmove(
-			_syncBuffer.data(),
-			(_syncBuffer.constData() + _capturePartFrames * _frameSize),
-			(_readSamples - _capturePartFrames) * _frameSize);
-		_readSamples -= _capturePartFrames;
-		_syncBufferOffset -= _capturePartFrames * _frameSize;
+		samplesAvailable -= kWantedPartSize;
+		_bufferOffset -= bytesToProcess;
+
+		if (samplesAvailable) {
+			auto to = _swrContext
+				? _resampleBuffer.data()
+				: _deviceBuffer.data();
+			memmove(
+				to,
+				(to + bytesToProcess),
+				samplesAvailable * kWantedFrameSize);
+		}
 	}
 }
 
@@ -762,9 +966,8 @@ DWORD AudioDeviceLoopbackWin::runCaptureThread() {
 		winrt::uninit_apartment();
 	});
 
-	_syncBuffer.resize(2 * (_bufferSizeFrames * _frameSize));
-	_resampleBuffer.resize(2 * (_bufferSizeFrames * _frameSize));
-	_syncBufferOffset = 0;
+	_deviceBuffer.resize(2 * (_bufferSizeFrames * _deviceFrameSize));
+	_bufferOffset = 0;
 
 	// hr = InitCaptureThreadPriority(); // #TODO
 	if (FAILED(hr)) {
@@ -869,6 +1072,13 @@ void AudioDeviceLoopbackWin::closeRecordingDevice() {
 	_audioRenderClientForLoopback = nullptr;
 	_audioClient = nullptr;
 	_endpointDevice = nullptr;
+
+	if (_swrContext) {
+		swr_free(&_swrContext);
+	}
+	_deviceBuffer.clear();
+	_resampleBuffer.clear();
+	_bufferOffset = 0;
 }
 
 bool AudioDeviceLoopbackWin::RecordingIsInitialized() const {

@@ -251,7 +251,6 @@ auto VideoTrack::Sink::nextFrameForDecode() -> FrameForDecode {
 	const auto current = counter();
 	const auto index = ((current + 3) / 2) % kFramesCount;
 	const auto frame = getFrame(index);
-	const auto next = getFrame((index + 1) % kFramesCount);
 	return { frame, current };
 }
 

@@ -116,7 +116,6 @@ void EnumerateDevices(ALCenum specifier, Callback &&callback) {
 		int index,
 		std::string *name,
 		std::string *guid) {
-	auto result = 0;
 	EnumerateDevices(specifier, [&](const char *device) {
 		if (index < 0) {
 			return;

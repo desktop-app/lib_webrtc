@@ -20,9 +20,9 @@ namespace Webrtc {
 rtc::scoped_refptr<webrtc::AudioDeviceModule> CreateAudioDeviceModule(
 		webrtc::TaskQueueFactory *factory,
 		Backend backend) {
-	const auto create = [&](webrtc::AudioDeviceModule::AudioLayer layer) {
-		return webrtc::AudioDeviceModule::Create(layer, factory);
-	};
+//	const auto create = [&](webrtc::AudioDeviceModule::AudioLayer layer) {
+//		return webrtc::AudioDeviceModule::Create(layer, factory);
+//	};
 	const auto check = [&](
 			const rtc::scoped_refptr<webrtc::AudioDeviceModule> &result) {
 		return (result && (result->Init() == 0)) ? result : nullptr;

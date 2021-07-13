@@ -104,8 +104,8 @@ void LoopbackCapturePushFarEnd(
 	}
 	memcpy(frame.data.data(), samples.constData(), samples.size());
 
-	RTC_LOG(LS_ERROR) << "Far End frame written at " << index
-		<< ", when: " << when;
+	//RTC_LOG(LS_ERROR) << "Far End frame written at " << index
+	//	<< ", when: " << when;
 
 	frame.when = when;
 	frame.state.store(State::Ready, std::memory_order_release);
@@ -634,19 +634,6 @@ void AudioDeviceLoopbackWin::processData() {
 		&position,
 		&counter);
 
-	LARGE_INTEGER counterValue;
-	QueryPerformanceCounter(&counterValue);
-	const auto nowCounter = (_queryPerformanceMultiplier > 0.)
-		? (_queryPerformanceMultiplier * counterValue.QuadPart)
-		: 0.;
-	const auto now = crl::now();
-	const auto whenCaptured = [&] {
-		const auto fullDelay = (nowCounter - double(counter))
-			+ ((_readSamples - int(framesAvailable))
-				* _captureFrequencyMultiplier);
-		return now - crl::time(std::round(fullDelay / 10'000.));
-	};
-
 	if (FAILED(hr)) {
 		captureFailed("Failed call to IAudioCaptureClient::GetBuffer.");
 		return;
@@ -655,6 +642,28 @@ void AudioDeviceLoopbackWin::processData() {
 	} else if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
 		data = nullptr;
 	}
+
+	const auto nowCounter = [&] {
+		if ((flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY)
+			|| (flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)) {
+			return double(counter);
+		}
+		LARGE_INTEGER counterValue;
+		QueryPerformanceCounter(&counterValue);
+		const auto result = (_queryPerformanceMultiplier > 0.)
+			? (_queryPerformanceMultiplier * counterValue.QuadPart)
+			: 0.;
+		return (result < counter || result > counter + 200) // wtf
+			? double(counter)
+			: result;
+	}();
+	const auto now = crl::now();
+	const auto whenCaptured = [&] {
+		const auto fullDelay = (nowCounter - double(counter))
+			+ ((_readSamples - int(framesAvailable))
+				* _captureFrequencyMultiplier);
+		return now - crl::time(std::round(fullDelay / 10'000.));
+	};
 
 	if (data) {
 		memcpy(

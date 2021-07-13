@@ -61,10 +61,6 @@ auto AudioDeviceModuleCreator(Backend backend)
 
 AudioDeviceModulePtr CreateLoopbackAudioDeviceModule(
 		webrtc::TaskQueueFactory* factory) {
-	const auto check = [&](
-			const rtc::scoped_refptr<webrtc::AudioDeviceModule> &result) {
-		return (result && (result->Init() == 0)) ? result : nullptr;
-	};
 #ifdef WEBRTC_WIN
 	auto result = rtc::scoped_refptr<webrtc::AudioDeviceModule>(
 		new rtc::RefCountedObject<details::AudioDeviceLoopbackWin>(factory));

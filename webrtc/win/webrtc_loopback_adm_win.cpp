@@ -7,6 +7,9 @@
 #include "webrtc/win/webrtc_loopback_adm_win.h"
 
 #include "rtc_base/logging.h"
+#include "modules/audio_processing/include/audio_processing.h"
+#include "modules/audio_processing/include/audio_frame_proxies.h"
+#include "api/audio/audio_frame.h"
 
 namespace Webrtc::details {
 namespace {
@@ -16,6 +19,38 @@ constexpr auto kWantedChannels = 2;
 constexpr auto kBufferSizeMs = crl::time(10);
 constexpr auto kWantedBitsPerSample = 16;
 constexpr auto kProcessInterval = crl::time(10);
+
+constexpr auto kFarEndFrequency = 48000;
+constexpr auto kFarEndChannels = 2;
+constexpr auto kFarEndFramesCount = 1000 / kBufferSizeMs;
+constexpr auto kFarEndChannelFrameSize = (kFarEndFrequency * kBufferSizeMs)
+	/ 1000;
+static_assert(kFarEndChannelFrameSize * 1000
+	== kFarEndFrequency * kBufferSizeMs);
+
+constexpr auto kMaxEchoDelay = crl::time(1000);
+
+enum class FarEndFrameState : uint8_t {
+	Empty,
+	Writing,
+	Reading,
+	Ready,
+};
+
+struct FarEndFrame {
+	std::array<std::int16_t, kFarEndChannelFrameSize * kFarEndChannels> data;
+	crl::time when;
+	std::atomic<FarEndFrameState> state;
+};
+
+struct FarEnd {
+	std::array<FarEndFrame, kFarEndFramesCount> frames;
+	std::atomic<int> WriteIndex;
+	std::atomic<int> ReadIndex;
+};
+
+std::atomic<bool> LoopbackCaptureActive/* = false*/;
+FarEnd LoopbackFarEnd/* = { .. 0 .. }*/;
 
 [[nodiscard]] int PartSize(int frequency) {
 	return (frequency * kBufferSizeMs + 999) / 1000;
@@ -29,11 +64,110 @@ void SetStringToArray(const std::string &string, char *array, int size) {
 	array[length] = 0;
 }
 
+[[nodiscard]] auto CreateAudioProcessing()
+-> std::unique_ptr<webrtc::AudioProcessing> {
+	auto result = std::unique_ptr<webrtc::AudioProcessing>(
+		webrtc::AudioProcessingBuilder().Create(webrtc::Config()));
+
+	auto config = webrtc::AudioProcessing::Config();
+	config.echo_canceller.enabled = true;
+	config.echo_canceller.mobile_mode = true;
+	result->ApplyConfig(config);
+	return result;
+}
+
 } // namespace
+
+bool IsLoopbackCaptureActive() {
+	return LoopbackCaptureActive;
+}
+
+void LoopbackCapturePushFarEnd(
+		crl::time when,
+		const QByteArray &samples,
+		int frequency,
+		int channels) {
+	Expects(frequency == kFarEndFrequency);
+	Expects(channels == kFarEndChannels);
+	Expects(samples.size()
+		== kFarEndChannelFrameSize * kFarEndChannels * sizeof(std::int16_t));
+
+	using State = FarEndFrameState;
+
+	const auto index = LoopbackFarEnd.WriteIndex.load(
+		std::memory_order_relaxed);
+	auto &frame = LoopbackFarEnd.frames[index];
+	auto empty = State::Empty;
+	if (!frame.state.compare_exchange_strong(empty, State::Writing)) {
+		// No space.
+		return;
+	}
+	memcpy(frame.data.data(), samples.constData(), samples.size());
+
+	RTC_LOG(LS_ERROR) << "Far End frame written at " << index
+		<< ", when: " << when;
+
+	frame.when = when;
+	frame.state.store(State::Ready, std::memory_order_release);
+	LoopbackFarEnd.WriteIndex.store(
+		(index + 1) % kFarEndFramesCount,
+		std::memory_order_relaxed);
+}
+
+std::optional<crl::time> LoopbackCaptureTakeFarEnd(
+		webrtc::AudioFrame &to,
+		crl::time nearEndWhen) {
+	Expects(to.sample_rate_hz_ == kFarEndFrequency);
+	Expects(to.num_channels_ == kFarEndChannels);
+	Expects(to.samples_per_channel_ == kFarEndChannelFrameSize);
+
+	using State = FarEndFrameState;
+
+	while (true) {
+		const auto index = LoopbackFarEnd.ReadIndex.load(
+			std::memory_order_relaxed);
+		auto &frame = LoopbackFarEnd.frames[index];
+		auto ready = State::Ready;
+		if (!frame.state.compare_exchange_strong(ready, State::Reading)) {
+			// Not ready.
+			//RTC_LOG(LS_ERROR) << "Near End when: " << nearEndWhen
+			//	<< "; ERROR Far End frame not ready at " << index;
+			return std::nullopt;
+		}
+		const auto delay = frame.when - nearEndWhen;
+		if (delay > kMaxEchoDelay) {
+			// Too far away, wait.
+			frame.state.store(State::Ready, std::memory_order_relaxed);
+			//RTC_LOG(LS_ERROR) << "Near End when: " << nearEndWhen
+			//	<< "; ERROR Far End frame too far away at " << index
+			//	<< ", when: " << frame.when << ", delay: " << delay;
+			return std::nullopt;
+		}
+		if (delay >= 0) {
+			memcpy(to.mutable_data(), frame.data.data(), frame.data.size());
+		}
+		frame.state.store(State::Empty, std::memory_order_release);
+		LoopbackFarEnd.ReadIndex.store(
+			(index + 1) % kFarEndFramesCount,
+			std::memory_order_relaxed);
+		if (delay >= 0) {
+			//RTC_LOG(LS_ERROR) << "Near End when: " << nearEndWhen
+			//	<< "; Far End frame read at " << index
+			//	<< ", when: " << frame.when << ", delay: " << delay;
+			return delay;
+		} else {
+			// Too old.
+			//RTC_LOG(LS_ERROR) << "Near End when: " << nearEndWhen
+			//	<< "; ERROR Far End frame too old at " << index
+			//	<< ", when: " << frame.when << ", delay: " << delay;
+		}
+	}
+}
 
 AudioDeviceLoopbackWin::AudioDeviceLoopbackWin(
 	webrtc::TaskQueueFactory *taskQueueFactory)
 : _audioDeviceBuffer(taskQueueFactory)
+, _audioProcessing(CreateAudioProcessing())
 , _audioSamplesReadyEvent(CreateEvent(nullptr, FALSE, FALSE, nullptr))
 , _captureThreadShutdownEvent(CreateEvent(nullptr, FALSE, FALSE, nullptr)) {
 }
@@ -374,6 +508,7 @@ void AudioDeviceLoopbackWin::openAudioClient() {
 
 	_frameSize = finalFormat->nBlockAlign;
 	_captureFrequency = finalFormat->nSamplesPerSec;
+	_captureFrequencyMultiplier = 10'000'000. / _captureFrequency;
 	_captureChannels = finalFormat->nChannels;
 	_capturePartFrames = PartSize(_captureFrequency);
 
@@ -456,6 +591,23 @@ int32_t AudioDeviceLoopbackWin::InitRecording() {
 	openRecordingDevice();
 	_audioDeviceBuffer.SetRecordingSampleRate(_captureFrequency);
 	_audioDeviceBuffer.SetRecordingChannels(_captureChannels);
+
+	_capturedFrame = std::make_unique<webrtc::AudioFrame>();
+	_capturedFrame->sample_rate_hz_ = _captureFrequency;
+	_capturedFrame->num_channels_ = _captureChannels;
+	_capturedFrame->samples_per_channel_ = _capturePartFrames;
+
+	_renderedFrame = std::make_unique<webrtc::AudioFrame>();
+	_renderedFrame->sample_rate_hz_ = kFarEndFrequency;
+	_renderedFrame->num_channels_ = kFarEndChannels;
+	_renderedFrame->samples_per_channel_ = kFarEndChannelFrameSize;
+
+	LARGE_INTEGER counterFrequency;
+	QueryPerformanceFrequency(&counterFrequency);
+	if (counterFrequency.QuadPart) {
+		_queryPerformanceMultiplier = 10'000'000. / counterFrequency.QuadPart;
+	}
+
 	if (_recordingFailed) {
 		closeRecordingDevice();
 	}
@@ -481,6 +633,19 @@ void AudioDeviceLoopbackWin::processData() {
 		&flags,
 		&position,
 		&counter);
+
+	LARGE_INTEGER counterValue;
+	QueryPerformanceCounter(&counterValue);
+	const auto nowCounter = (_queryPerformanceMultiplier > 0.)
+		? (_queryPerformanceMultiplier * counterValue.QuadPart)
+		: 0.;
+	const auto now = crl::now();
+	const auto whenCaptured = [&] {
+		const auto fullDelay = (nowCounter - double(counter))
+			+ ((_readSamples - int(framesAvailable))
+				* _captureFrequencyMultiplier);
+		return now - crl::time(std::round(fullDelay / 10'000.));
+	};
 
 	if (FAILED(hr)) {
 		captureFailed("Failed call to IAudioCaptureClient::GetBuffer.");
@@ -513,9 +678,41 @@ void AudioDeviceLoopbackWin::processData() {
 	_syncBufferOffset += framesAvailable * _frameSize;
 
 	while (_readSamples >= _capturePartFrames) {
-		_audioDeviceBuffer.SetRecordedBuffer(
-			_syncBuffer.constData(),
-			_capturePartFrames);
+		const auto delay = LoopbackCaptureTakeFarEnd(
+			*_renderedFrame,
+			whenCaptured());
+
+		if (delay.has_value()) {
+			// Testing ideal echo cancellation environment.
+			// _audioProcessing->set_stream_delay_ms(0);
+			//memcpy(
+			//	_capturedFrame->mutable_data(),
+			//	_syncBuffer.constData(),
+			//	_capturePartFrames * _frameSize);
+			//webrtc::ProcessReverseAudioFrame(
+			//	_audioProcessing.get(),
+			//	_capturedFrame.get());
+
+			_audioProcessing->set_stream_delay_ms(*delay);
+			webrtc::ProcessReverseAudioFrame(
+				_audioProcessing.get(),
+				_renderedFrame.get());
+
+			memcpy(
+				_capturedFrame->mutable_data(),
+				_syncBuffer.constData(),
+				_capturePartFrames * _frameSize);
+			webrtc::ProcessAudioFrame(
+				_audioProcessing.get(),
+				_capturedFrame.get());
+			_audioDeviceBuffer.SetRecordedBuffer(
+				_capturedFrame->data(),
+				_capturePartFrames);
+		} else {
+			_audioDeviceBuffer.SetRecordedBuffer(
+				_syncBuffer.constData(),
+				_capturePartFrames);
+		}
 		_audioDeviceBuffer.DeliverRecordedData();
 
 		memmove(
@@ -599,6 +796,8 @@ DWORD AudioDeviceLoopbackWin::runCaptureThread() {
 void AudioDeviceLoopbackWin::startCaptureOnThread() {
 	auto hr = HRESULT();
 
+	LoopbackCaptureActive = true;
+
 	_thread = CreateThread(NULL, 0, CaptureThreadMethod, this, 0, nullptr);
 	if (!_thread) {
 		return captureFailed("Failed to create thread.");
@@ -638,6 +837,8 @@ void AudioDeviceLoopbackWin::stopCaptureOnThread() {
 	CloseHandle(_thread);
 	_thread = nullptr;
 	ResetEvent(_captureThreadShutdownEvent);
+
+	LoopbackCaptureActive = false;
 }
 
 int32_t AudioDeviceLoopbackWin::StopRecording() {

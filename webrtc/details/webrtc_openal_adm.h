@@ -9,6 +9,7 @@
 #include "modules/audio_device/include/audio_device.h"
 #include "modules/audio_device/audio_device_buffer.h"
 
+#include <crl/crl_time.h>
 #include <al.h>
 #include <alc.h>
 #include <atomic>
@@ -118,6 +119,10 @@ public:
 
 private:
 	struct Data;
+	struct ExactQueuedTime {
+		crl::time now = 0;
+		crl::time queued = 0;
+	};
 
 	template <typename Callback>
 	std::invoke_result_t<Callback> sync(Callback &&callback);
@@ -161,6 +166,10 @@ private:
 		ALuint param,
 		ALsizei length,
 		const ALchar *message);
+
+#ifdef WEBRTC_WIN
+	[[nodiscard]] crl::time countExactQueuedTillForLoopback(bool playing);
+#endif // WEBRTC_WIN
 
 	rtc::Thread *_thread = nullptr;
 	webrtc::AudioDeviceBuffer _audioDeviceBuffer;

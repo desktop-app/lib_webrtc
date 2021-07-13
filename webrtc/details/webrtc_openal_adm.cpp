@@ -19,6 +19,10 @@
 #include <QtCore/QPointer>
 #include <QtCore/QThread>
 
+#ifdef WEBRTC_WIN
+#include "webrtc/win/webrtc_loopback_adm_win.h"
+#endif // WEBRTC_WIN
+
 namespace Webrtc::details {
 namespace {
 
@@ -37,15 +41,20 @@ constexpr auto kRecordingBufferSize = kRecordingPart * sizeof(int16_t)
 	* kRecordingChannels;
 constexpr auto kRestartAfterEmptyData = 50; // Half a second with no data.
 constexpr auto kProcessInterval = crl::time(10);
+constexpr auto kQueryExactTimeEach = 20;
 
-constexpr auto kBuffersFullCount = 10;
-constexpr auto kBuffersKeepReadyCount = 8;
+constexpr auto kBuffersFullCount = 20;
+constexpr auto kBuffersKeepReadyCount = 16;
 
-constexpr auto kAL_EVENT_CALLBACK_FUNCTION_SOFT = 0x19A2;
-constexpr auto kAL_EVENT_CALLBACK_USER_PARAM_SOFT = 0x19A3;
-constexpr auto kAL_EVENT_TYPE_BUFFER_COMPLETED_SOFT = 0x19A4;
-constexpr auto kAL_EVENT_TYPE_SOURCE_STATE_CHANGED_SOFT = 0x19A5;
-constexpr auto kAL_EVENT_TYPE_DISCONNECTED_SOFT = 0x19A6;
+auto kAL_EVENT_CALLBACK_FUNCTION_SOFT = ALenum();
+auto kAL_EVENT_CALLBACK_USER_PARAM_SOFT = ALenum();
+auto kAL_EVENT_TYPE_BUFFER_COMPLETED_SOFT = ALenum();
+auto kAL_EVENT_TYPE_SOURCE_STATE_CHANGED_SOFT = ALenum();
+auto kAL_EVENT_TYPE_DISCONNECTED_SOFT = ALenum();
+auto kAL_SAMPLE_OFFSET_CLOCK_SOFT = ALenum();
+auto kAL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT = ALenum();
+
+using AL_INT64_TYPE = std::int64_t;
 
 using ALEVENTPROCSOFT = void(*)(
 	ALenum eventType,
@@ -58,9 +67,16 @@ using ALEVENTCALLBACKSOFT = void(*)(
 	ALEVENTPROCSOFT callback,
 	void *userParam);
 using ALCSETTHREADCONTEXT = ALCboolean(*)(ALCcontext *context);
+using ALGETSOURCE3I64SOFT = void(*)(
+	ALuint,
+	ALenum,
+	AL_INT64_TYPE*,
+	AL_INT64_TYPE*,
+	AL_INT64_TYPE*);
 
 ALEVENTCALLBACKSOFT alEventCallbackSOFT/* = nullptr*/;
 ALCSETTHREADCONTEXT alcSetThreadContext/* = nullptr*/;
+ALGETSOURCE3I64SOFT alGetSource3i64SOFT/* = nullptr*/;
 
 [[nodiscard]] bool Failed(ALCdevice *device) {
 	if (auto code = alcGetError(device); code != ALC_NO_ERROR) {
@@ -176,6 +192,9 @@ struct AudioDeviceOpenAL::Data {
 	int queuedBuffersCount = 0;
 	std::array<ALuint, kBuffersFullCount> buffers = { { 0 } };
 	std::array<bool, kBuffersFullCount> queuedBuffers = { { false } };
+	int64_t exactDeviceTimeCounter = 0;
+	int64_t lastExactDeviceTime = 0;
+	crl::time lastExactDeviceTimeWhen = 0;
 	bool playing = false;
 };
 
@@ -239,6 +258,22 @@ int32_t AudioDeviceOpenAL::Init() {
 	alEventCallbackSOFT = (ALEVENTCALLBACKSOFT)alcGetProcAddress(
 		nullptr,
 		"alEventCallbackSOFT");
+
+	alGetSource3i64SOFT = (ALGETSOURCE3I64SOFT)alcGetProcAddress(
+		nullptr,
+		"alGetSource3i64SOFT");
+
+#define RESOLVE_ENUM(ENUM) k##ENUM = alcGetEnumValue(nullptr, #ENUM)
+	RESOLVE_ENUM(AL_EVENT_CALLBACK_FUNCTION_SOFT);
+	RESOLVE_ENUM(AL_EVENT_CALLBACK_FUNCTION_SOFT);
+	RESOLVE_ENUM(AL_EVENT_CALLBACK_USER_PARAM_SOFT);
+	RESOLVE_ENUM(AL_EVENT_TYPE_BUFFER_COMPLETED_SOFT);
+	RESOLVE_ENUM(AL_EVENT_TYPE_SOURCE_STATE_CHANGED_SOFT);
+	RESOLVE_ENUM(AL_EVENT_TYPE_DISCONNECTED_SOFT);
+	RESOLVE_ENUM(AL_SAMPLE_OFFSET_CLOCK_SOFT);
+	RESOLVE_ENUM(AL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT);
+#undef RESOLVE_ENUM
+
 	_initialized = true;
 	return 0;
 }
@@ -688,6 +723,63 @@ void AudioDeviceOpenAL::clearProcessedBuffers() {
 	}
 }
 
+#ifdef WEBRTC_WIN
+crl::time AudioDeviceOpenAL::countExactQueuedTillForLoopback(bool playing) {
+	if (!IsLoopbackCaptureActive()) {
+		return 0;
+	}
+	const auto now = crl::now();
+
+	auto sampleOffset = AL_INT64_TYPE();
+	auto clockTime = AL_INT64_TYPE();
+	auto exactDeviceTime = AL_INT64_TYPE();
+	if (alGetSource3i64SOFT
+		&& kAL_SAMPLE_OFFSET_CLOCK_SOFT
+		&& kAL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT) {
+		if (!_data->lastExactDeviceTimeWhen
+			|| !(++_data->exactDeviceTimeCounter % kQueryExactTimeEach)) {
+			alGetSource3i64SOFT(
+				_data->source,
+				kAL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT,
+				&sampleOffset,
+				&clockTime,
+				&exactDeviceTime);
+			_data->lastExactDeviceTime = exactDeviceTime;
+			_data->lastExactDeviceTimeWhen = now;
+		} else {
+			alGetSource3i64SOFT(
+				_data->source,
+				kAL_SAMPLE_OFFSET_CLOCK_SOFT,
+				&sampleOffset,
+				&clockTime,
+				&exactDeviceTime);
+
+			// The exactDeviceTime is in nanoseconds.
+			exactDeviceTime = _data->lastExactDeviceTime
+				+ (now - _data->lastExactDeviceTimeWhen) * 1'000'000;
+		}
+	} else {
+		auto offset = ALint(0);
+		alGetSourcei(_data->source, AL_SAMPLE_OFFSET, &offset);
+		sampleOffset = offset;
+	}
+
+	const auto queuedSamples = _data->queuedBuffersCount * kPlayoutPart;
+	const auto processedInOpenAL = playing ? sampleOffset : queuedSamples;
+	const auto secondsQueuedInDevice = std::max(
+		clockTime - exactDeviceTime,
+		AL_INT64_TYPE(0)
+	) / 1'000'000'000.;
+	const auto secondsQueuedInOpenAL = (queuedSamples - processedInOpenAL)
+		/ double(kPlayoutFrequency);
+
+	const auto queuedTotal = crl::time(
+		std::round((secondsQueuedInDevice + secondsQueuedInOpenAL) * 1'000));
+
+	return now + queuedTotal;
+}
+#endif // WEBRTC_WIN
+
 void AudioDeviceOpenAL::processPlayoutData() {
 	Expects(_data != nullptr);
 
@@ -697,6 +789,11 @@ void AudioDeviceOpenAL::processPlayoutData() {
 		return (state == AL_PLAYING);
 	};
 	const auto wasPlaying = playing();
+
+#ifdef WEBRTC_WIN
+	auto wasQueuedTill = countExactQueuedTillForLoopback(wasPlaying);
+#endif // WEBRTC_WIN
+
 	if (wasPlaying) {
 		clearProcessedBuffers();
 	} else {
@@ -722,6 +819,18 @@ void AudioDeviceOpenAL::processPlayoutData() {
 			_data->playoutSamples.data(),
 			_data->playoutSamples.size(),
 			kPlayoutFrequency);
+
+#ifdef WEBRTC_WIN
+		if (wasQueuedTill) {
+			LoopbackCapturePushFarEnd(
+				wasQueuedTill,
+				_data->playoutSamples,
+				kPlayoutFrequency,
+				kPlayoutChannels);
+			wasQueuedTill += kBufferSizeMs;
+		}
+#endif // WEBRTC_WIN
+
 		_data->queuedBuffers[index] = true;
 		++_data->queuedBuffersCount;
 		if (wasPlaying) {
@@ -843,6 +952,10 @@ void AudioDeviceOpenAL::startPlayingOnThread() {
 			}
 			_data->source = source;
 			alGenBuffers(_data->buffers.size(), _data->buffers.data());
+
+			_data->exactDeviceTimeCounter = 0;
+			_data->lastExactDeviceTime = 0;
+			_data->lastExactDeviceTimeWhen = 0;
 
 			_data->playoutSamples = QByteArray(kPlayoutBufferSize, 0);
 			//for (auto i = 0; i != kBuffersKeepReadyCount; ++i) {

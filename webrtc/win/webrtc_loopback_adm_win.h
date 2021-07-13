@@ -18,7 +18,20 @@ namespace rtc {
 class Thread;
 } // namespace rtc
 
+namespace webrtc {
+class AudioProcessing;
+class AudioFrame;
+} // namespace webrtc
+
 namespace Webrtc::details {
+
+[[nodiscard]] bool IsLoopbackCaptureActive();
+
+void LoopbackCapturePushFarEnd(
+	crl::time when,
+	const QByteArray &samples,
+	int frequency,
+	int channels);
 
 class AudioDeviceLoopbackWin : public webrtc::AudioDeviceModule {
 public:
@@ -140,6 +153,10 @@ private:
 	winrt::com_ptr<IAudioClient> _audioRenderClientForLoopback;
 	winrt::com_ptr<IAudioCaptureClient> _audioCaptureClient;
 
+	std::unique_ptr<webrtc::AudioProcessing> _audioProcessing;
+	std::unique_ptr<webrtc::AudioFrame> _capturedFrame;
+	std::unique_ptr<webrtc::AudioFrame> _renderedFrame;
+
 	HANDLE _thread = nullptr;
 	HANDLE _audioSamplesReadyEvent = nullptr;
 	HANDLE _captureThreadShutdownEvent = nullptr;
@@ -151,6 +168,10 @@ private:
 	UINT32 _capturePartFrames = 0;
 	QByteArray _syncBuffer;
 	UINT32 _syncBufferOffset = 0;
+
+	double _queryPerformanceMultiplier = 0.;
+	double _captureFrequencyMultiplier = 0.;
+
 	int _readSamples = 0;
 
 	QByteArray _resampleBuffer;

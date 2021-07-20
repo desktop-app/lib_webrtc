@@ -41,7 +41,6 @@ constexpr auto kRecordingBufferSize = kRecordingPart * sizeof(int16_t)
 	* kRecordingChannels;
 constexpr auto kRestartAfterEmptyData = 50; // Half a second with no data.
 constexpr auto kProcessInterval = crl::time(10);
-constexpr auto kQueryExactTimeEach = 20;
 
 constexpr auto kBuffersFullCount = 20;
 constexpr auto kBuffersKeepReadyCount = 16;

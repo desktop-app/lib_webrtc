@@ -45,6 +45,10 @@ constexpr auto kProcessInterval = crl::time(10);
 constexpr auto kBuffersFullCount = 20;
 constexpr auto kBuffersKeepReadyCount = 16;
 
+#ifdef WEBRTC_WIN
+constexpr auto kQueryExactTimeEach = 20;
+#endif // WEBRTC_WIN
+
 auto kAL_EVENT_CALLBACK_FUNCTION_SOFT = ALenum();
 auto kAL_EVENT_CALLBACK_USER_PARAM_SOFT = ALenum();
 auto kAL_EVENT_TYPE_BUFFER_COMPLETED_SOFT = ALenum();

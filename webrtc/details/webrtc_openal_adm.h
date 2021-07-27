@@ -167,9 +167,10 @@ private:
 		ALsizei length,
 		const ALchar *message);
 
-#ifdef WEBRTC_WIN
-	[[nodiscard]] crl::time countExactQueuedTillForLoopback(bool playing);
-#endif // WEBRTC_WIN
+	[[nodiscard]] crl::time countExactQueuedMsForLatency(
+		crl::time now,
+		bool playing);
+	[[nodiscard]] crl::time queryRecordingLatencyMs();
 
 	rtc::Thread *_thread = nullptr;
 	webrtc::AudioDeviceBuffer _audioDeviceBuffer;
@@ -178,11 +179,13 @@ private:
 	ALCdevice *_playoutDevice = nullptr;
 	ALCcontext *_playoutContext = nullptr;
 	std::string _playoutDeviceId;
+	crl::time _playoutLatency = 0;
 	bool _playoutInitialized = false;
 	bool _playoutFailed = false;
 
 	ALCdevice *_recordingDevice = nullptr;
 	std::string _recordingDeviceId;
+	crl::time _recordingLatency = 0;
 	bool _recordingInitialized = false;
 	bool _recordingFailed = false;
 

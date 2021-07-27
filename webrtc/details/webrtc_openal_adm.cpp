@@ -42,13 +42,14 @@ constexpr auto kRecordingBufferSize = kRecordingPart * sizeof(int16_t)
 constexpr auto kRestartAfterEmptyData = 50; // Half a second with no data.
 constexpr auto kProcessInterval = crl::time(10);
 
-constexpr auto kBuffersFullCount = 20;
-constexpr auto kBuffersKeepReadyCount = 16;
+constexpr auto kBuffersFullCount = 5;
+constexpr auto kBuffersKeepReadyCount = 3;
 
-#ifdef WEBRTC_WIN
+constexpr auto kDefaultRecordingLatency = crl::time(20);
+constexpr auto kDefaultPlayoutLatency = crl::time(20);
 constexpr auto kQueryExactTimeEach = 20;
-#endif // WEBRTC_WIN
 
+constexpr auto kALMaxValues = 6;
 auto kAL_EVENT_CALLBACK_FUNCTION_SOFT = ALenum();
 auto kAL_EVENT_CALLBACK_USER_PARAM_SOFT = ALenum();
 auto kAL_EVENT_TYPE_BUFFER_COMPLETED_SOFT = ALenum();
@@ -56,6 +57,8 @@ auto kAL_EVENT_TYPE_SOURCE_STATE_CHANGED_SOFT = ALenum();
 auto kAL_EVENT_TYPE_DISCONNECTED_SOFT = ALenum();
 auto kAL_SAMPLE_OFFSET_CLOCK_SOFT = ALenum();
 auto kAL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT = ALenum();
+
+auto kALC_DEVICE_LATENCY_SOFT = ALenum();
 
 using AL_INT64_TYPE = std::int64_t;
 
@@ -70,16 +73,20 @@ using ALEVENTCALLBACKSOFT = void(*)(
 	ALEVENTPROCSOFT callback,
 	void *userParam);
 using ALCSETTHREADCONTEXT = ALCboolean(*)(ALCcontext *context);
-using ALGETSOURCE3I64SOFT = void(*)(
-	ALuint,
-	ALenum,
-	AL_INT64_TYPE*,
-	AL_INT64_TYPE*,
-	AL_INT64_TYPE*);
+using ALGETSOURCEI64VSOFT = void(*)(
+	ALuint source,
+	ALenum param,
+	AL_INT64_TYPE *values);
+using ALCGETINTEGER64VSOFT = void(*)(
+	ALCdevice *device,
+	ALCenum pname,
+	ALsizei size,
+	AL_INT64_TYPE *values);
 
 ALEVENTCALLBACKSOFT alEventCallbackSOFT/* = nullptr*/;
 ALCSETTHREADCONTEXT alcSetThreadContext/* = nullptr*/;
-ALGETSOURCE3I64SOFT alGetSource3i64SOFT/* = nullptr*/;
+ALGETSOURCEI64VSOFT alGetSourcei64vSOFT/* = nullptr*/;
+ALCGETINTEGER64VSOFT alcGetInteger64vSOFT/* = nullptr*/;
 
 [[nodiscard]] bool Failed(ALCdevice *device) {
 	if (auto code = alcGetError(device); code != ALC_NO_ERROR) {
@@ -261,9 +268,13 @@ int32_t AudioDeviceOpenAL::Init() {
 		nullptr,
 		"alEventCallbackSOFT");
 
-	alGetSource3i64SOFT = (ALGETSOURCE3I64SOFT)alcGetProcAddress(
+	alGetSourcei64vSOFT = (ALGETSOURCEI64VSOFT)alcGetProcAddress(
 		nullptr,
-		"alGetSource3i64SOFT");
+		"alGetSourcei64vSOFT");
+
+	alcGetInteger64vSOFT = (ALCGETINTEGER64VSOFT)alcGetProcAddress(
+		nullptr,
+		"alcGetInteger64vSOFT");
 
 #define RESOLVE_ENUM(ENUM) k##ENUM = alcGetEnumValue(nullptr, #ENUM)
 	RESOLVE_ENUM(AL_EVENT_CALLBACK_FUNCTION_SOFT);
@@ -274,6 +285,7 @@ int32_t AudioDeviceOpenAL::Init() {
 	RESOLVE_ENUM(AL_EVENT_TYPE_DISCONNECTED_SOFT);
 	RESOLVE_ENUM(AL_SAMPLE_OFFSET_CLOCK_SOFT);
 	RESOLVE_ENUM(AL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT);
+	RESOLVE_ENUM(ALC_DEVICE_LATENCY_SOFT);
 #undef RESOLVE_ENUM
 
 	_initialized = true;
@@ -638,11 +650,11 @@ void AudioDeviceOpenAL::ensureThreadStarted() {
 void AudioDeviceOpenAL::processData() {
 	Expects(_data != nullptr);
 
-	if (_data->recording && !_recordingFailed) {
-		processRecordingData();
-	}
 	if (_data->playing && !_playoutFailed) {
 		processPlayoutData();
+	}
+	if (_data->recording && !_recordingFailed) {
+		processRecordingData();
 	}
 }
 
@@ -666,6 +678,9 @@ bool AudioDeviceOpenAL::processRecordedPart(bool firstInCycle) {
 		return false;
 	}
 
+	_recordingLatency = queryRecordingLatencyMs();
+	//RTC_LOG(LS_ERROR) << "RECORDING LATENCY: " << _recordingLatency << "ms";
+
 	_data->emptyRecordingData = 0;
 	if (_data->recordedSamples.size() < kRecordingBufferSize) {
 		_data->recordedSamples.resize(kRecordingBufferSize);
@@ -681,7 +696,7 @@ bool AudioDeviceOpenAL::processRecordedPart(bool firstInCycle) {
 	_audioDeviceBuffer.SetRecordedBuffer(
 		_data->recordedSamples.data(),
 		kRecordingPart);
-	//_audioDeviceBuffer.SetVQEData(playout_delay_ms_, record_delay_ms);
+	_audioDeviceBuffer.SetVQEData(_playoutLatency, _recordingLatency);
 	_audioDeviceBuffer.DeliverRecordedData();
 	return true;
 }
@@ -725,36 +740,46 @@ void AudioDeviceOpenAL::clearProcessedBuffers() {
 	}
 }
 
+crl::time AudioDeviceOpenAL::queryRecordingLatencyMs() {
 #ifdef WEBRTC_WIN
-crl::time AudioDeviceOpenAL::countExactQueuedTillForLoopback(bool playing) {
-	if (!IsLoopbackCaptureActive()) {
-		return 0;
+	if (kALC_DEVICE_LATENCY_SOFT
+		&& kAL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT) { // Check patched build.
+		auto latency = AL_INT64_TYPE();
+		alcGetInteger64vSOFT(
+			_recordingDevice,
+			kALC_DEVICE_LATENCY_SOFT,
+			1,
+			&latency);
+		return latency / 1'000'000;
 	}
-	const auto now = crl::now();
+#endif // WEBRTC_WIN
+	return kDefaultRecordingLatency;
+}
 
-	auto sampleOffset = AL_INT64_TYPE();
-	auto clockTime = AL_INT64_TYPE();
-	auto exactDeviceTime = AL_INT64_TYPE();
-	if (alGetSource3i64SOFT
+crl::time AudioDeviceOpenAL::countExactQueuedMsForLatency(
+		crl::time now,
+		bool playing) {
+	auto values = std::array<AL_INT64_TYPE, kALMaxValues>{};
+	auto &sampleOffset = values[0];
+	auto &clockTime = values[1];
+	auto &exactDeviceTime = values[2];
+	const auto countExact = alGetSourcei64vSOFT
 		&& kAL_SAMPLE_OFFSET_CLOCK_SOFT
-		&& kAL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT) {
+		&& kAL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT;
+	if (countExact) {
 		if (!_data->lastExactDeviceTimeWhen
 			|| !(++_data->exactDeviceTimeCounter % kQueryExactTimeEach)) {
-			alGetSource3i64SOFT(
+			alGetSourcei64vSOFT(
 				_data->source,
 				kAL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT,
-				&sampleOffset,
-				&clockTime,
-				&exactDeviceTime);
+				values.data());
 			_data->lastExactDeviceTime = exactDeviceTime;
 			_data->lastExactDeviceTimeWhen = now;
 		} else {
-			alGetSource3i64SOFT(
+			alGetSourcei64vSOFT(
 				_data->source,
 				kAL_SAMPLE_OFFSET_CLOCK_SOFT,
-				&sampleOffset,
-				&clockTime,
-				&exactDeviceTime);
+				values.data());
 
 			// The exactDeviceTime is in nanoseconds.
 			exactDeviceTime = _data->lastExactDeviceTime
@@ -763,24 +788,27 @@ crl::time AudioDeviceOpenAL::countExactQueuedTillForLoopback(bool playing) {
 	} else {
 		auto offset = ALint(0);
 		alGetSourcei(_data->source, AL_SAMPLE_OFFSET, &offset);
-		sampleOffset = offset;
+		sampleOffset = (AL_INT64_TYPE(offset) << 32);
 	}
 
-	const auto queuedSamples = _data->queuedBuffersCount * kPlayoutPart;
+	const auto queuedSamples = (AL_INT64_TYPE(
+		_data->queuedBuffersCount * kPlayoutPart) << 32);
 	const auto processedInOpenAL = playing ? sampleOffset : queuedSamples;
 	const auto secondsQueuedInDevice = std::max(
 		clockTime - exactDeviceTime,
 		AL_INT64_TYPE(0)
 	) / 1'000'000'000.;
-	const auto secondsQueuedInOpenAL = (queuedSamples - processedInOpenAL)
-		/ double(kPlayoutFrequency);
+	const auto secondsQueuedInOpenAL
+		= (double((queuedSamples - processedInOpenAL) >> (32 - 10))
+			/ double(kPlayoutFrequency * (1 << 10)));
 
 	const auto queuedTotal = crl::time(
 		std::round((secondsQueuedInDevice + secondsQueuedInOpenAL) * 1'000));
 
-	return now + queuedTotal;
+	return countExact
+		? queuedTotal
+		: std::max(queuedTotal, kDefaultPlayoutLatency);
 }
-#endif // WEBRTC_WIN
 
 void AudioDeviceOpenAL::processPlayoutData() {
 	Expects(_data != nullptr);
@@ -791,10 +819,6 @@ void AudioDeviceOpenAL::processPlayoutData() {
 		return (state == AL_PLAYING);
 	};
 	const auto wasPlaying = playing();
-
-#ifdef WEBRTC_WIN
-	auto wasQueuedTill = countExactQueuedTillForLoopback(wasPlaying);
-#endif // WEBRTC_WIN
 
 	if (wasPlaying) {
 		clearProcessedBuffers();
@@ -812,6 +836,10 @@ void AudioDeviceOpenAL::processPlayoutData() {
 			//ranges::fill(_data->playoutSamples, 0);
 			break;
 		}
+		const auto now = crl::now();
+		_playoutLatency = countExactQueuedMsForLatency(now, wasPlaying);
+		//RTC_LOG(LS_ERROR) << "PLAYOUT LATENCY: " << _playoutLatency << "ms";
+
 		const auto i = ranges::find(_data->queuedBuffers, false);
 		Assert(i != end(_data->queuedBuffers));
 		const auto index = int(i - begin(_data->queuedBuffers));
@@ -823,13 +851,12 @@ void AudioDeviceOpenAL::processPlayoutData() {
 			kPlayoutFrequency);
 
 #ifdef WEBRTC_WIN
-		if (wasQueuedTill) {
+		if (IsLoopbackCaptureActive()) {
 			LoopbackCapturePushFarEnd(
-				wasQueuedTill,
+				now + _playoutLatency,
 				_data->playoutSamples,
 				kPlayoutFrequency,
 				kPlayoutChannels);
-			wasQueuedTill += kBufferSizeMs;
 		}
 #endif // WEBRTC_WIN
 

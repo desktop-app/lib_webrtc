@@ -20,35 +20,35 @@ namespace Webrtc {
 rtc::scoped_refptr<webrtc::AudioDeviceModule> CreateAudioDeviceModule(
 		webrtc::TaskQueueFactory *factory,
 		Backend backend) {
-//	const auto create = [&](webrtc::AudioDeviceModule::AudioLayer layer) {
-//		return webrtc::AudioDeviceModule::Create(layer, factory);
-//	};
+	const auto create = [&](webrtc::AudioDeviceModule::AudioLayer layer) {
+		return webrtc::AudioDeviceModule::Create(layer, factory);
+	};
 	const auto check = [&](
 			const rtc::scoped_refptr<webrtc::AudioDeviceModule> &result) {
 		return (result && (result->Init() == 0)) ? result : nullptr;
 	};
+#ifdef WEBRTC_WIN
+	if (backend == Backend::ADM2) {
+		if (auto result = check(webrtc::CreateWindowsCoreAudioAudioDeviceModule(factory))) {
+			return result;
+		}
+	}
+#endif // WEBRTC_WIN
+	if (backend == Backend::ADM) {
+		if (auto result = check(create(webrtc::AudioDeviceModule::kPlatformDefaultAudio))) {
+			return result;
+		}
+#ifdef WEBRTC_LINUX
+		if (auto result = check(create(webrtc::AudioDeviceModule::kLinuxAlsaAudio))) {
+			return result;
+		}
+#endif // WEBRTC_LINUX
+	}
 	if (true || backend == Backend::OpenAL) {
 		if (auto result = check(new rtc::RefCountedObject<details::AudioDeviceOpenAL>(factory))) {
 			return result;
 		}
 	}
-//#ifdef WEBRTC_WIN
-//	if (backend == Backend::ADM2) {
-//		if (auto result = check(webrtc::CreateWindowsCoreAudioAudioDeviceModule(factory))) {
-//			return result;
-//		}
-//	}
-//#endif // WEBRTC_WIN
-//	if (backend == Backend::ADM) {
-//		if (auto result = check(create(webrtc::AudioDeviceModule::kPlatformDefaultAudio))) {
-//			return result;
-//		}
-//#ifdef WEBRTC_LINUX
-//		if (auto result = check(create(webrtc::AudioDeviceModule::kLinuxAlsaAudio))) {
-//			return result;
-//		}
-//#endif // WEBRTC_LINUX
-//	}
 	return nullptr;
 }
 

@@ -180,6 +180,7 @@ private:
 	ALCcontext *_playoutContext = nullptr;
 	std::string _playoutDeviceId;
 	crl::time _playoutLatency = 0;
+	int _playoutChannels = 2;
 	bool _playoutInitialized = false;
 	bool _playoutFailed = false;
 

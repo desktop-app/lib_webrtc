@@ -29,12 +29,9 @@ namespace {
 constexpr auto kRecordingFrequency = 48000;
 constexpr auto kPlayoutFrequency = 48000;
 constexpr auto kRecordingChannels = 1;
-constexpr auto kPlayoutChannels = 2;
 constexpr auto kBufferSizeMs = crl::time(10);
 constexpr auto kPlayoutPart = (kPlayoutFrequency * kBufferSizeMs + 999)
 	/ 1000;
-constexpr auto kPlayoutBufferSize = kPlayoutPart * sizeof(int16_t)
-	* kPlayoutChannels;
 constexpr auto kRecordingPart = (kRecordingFrequency * kBufferSizeMs + 999)
 	/ 1000;
 constexpr auto kRecordingBufferSize = kRecordingPart * sizeof(int16_t)
@@ -235,9 +232,7 @@ AudioDeviceOpenAL::AudioDeviceOpenAL(
 	webrtc::TaskQueueFactory *taskQueueFactory)
 : _audioDeviceBuffer(taskQueueFactory) {
 	_audioDeviceBuffer.SetRecordingSampleRate(kRecordingFrequency);
-	_audioDeviceBuffer.SetPlayoutSampleRate(kPlayoutFrequency);
 	_audioDeviceBuffer.SetRecordingChannels(kRecordingChannels);
-	_audioDeviceBuffer.SetPlayoutChannels(kPlayoutChannels);
 }
 
 AudioDeviceOpenAL::~AudioDeviceOpenAL() {
@@ -409,12 +404,16 @@ int32_t AudioDeviceOpenAL::StereoPlayoutIsAvailable(bool *available) const {
 }
 
 int32_t AudioDeviceOpenAL::SetStereoPlayout(bool enable) {
-	return enable ? 0 : -1;
+	if (Playing()) {
+		return -1;
+	}
+	_playoutChannels = enable ? 2 : 1;
+	return 0;
 }
 
 int32_t AudioDeviceOpenAL::StereoPlayout(bool *enabled) const {
 	if (enabled) {
-		*enabled = true;
+		*enabled = (_playoutChannels == 2);
 	}
 	return 0;
 }
@@ -517,8 +516,6 @@ int32_t AudioDeviceOpenAL::InitPlayout() {
 	_playoutInitialized = true;
 	ensureThreadStarted();
 	openPlayoutDevice();
-	_audioDeviceBuffer.SetPlayoutSampleRate(kPlayoutFrequency);
-	_audioDeviceBuffer.SetPlayoutChannels(kPlayoutChannels);
 	return 0;
 }
 
@@ -845,18 +842,18 @@ void AudioDeviceOpenAL::processPlayoutData() {
 		const auto index = int(i - begin(_data->queuedBuffers));
 		alBufferData(
 			_data->buffers[index],
-			AL_FORMAT_STEREO16,
+			(_playoutChannels == 2) ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16,
 			_data->playoutSamples.data(),
 			_data->playoutSamples.size(),
 			kPlayoutFrequency);
 
 #ifdef WEBRTC_WIN
-		if (IsLoopbackCaptureActive()) {
+		if (IsLoopbackCaptureActive() && _playoutChannels == 2) {
 			LoopbackCapturePushFarEnd(
 				now + _playoutLatency,
 				_data->playoutSamples,
 				kPlayoutFrequency,
-				kPlayoutChannels);
+				_playoutChannels);
 		}
 #endif // WEBRTC_WIN
 
@@ -986,7 +983,10 @@ void AudioDeviceOpenAL::startPlayingOnThread() {
 			_data->lastExactDeviceTime = 0;
 			_data->lastExactDeviceTimeWhen = 0;
 
-			_data->playoutSamples = QByteArray(kPlayoutBufferSize, 0);
+			const auto bufferSize = kPlayoutPart * sizeof(int16_t)
+				* _playoutChannels;
+
+			_data->playoutSamples = QByteArray(bufferSize, 0);
 			//for (auto i = 0; i != kBuffersKeepReadyCount; ++i) {
 			//	alBufferData(
 			//		_data->buffers[i],
@@ -1211,6 +1211,8 @@ int32_t AudioDeviceOpenAL::StartPlayout() {
 		_playoutFailed = false;
 		openPlayoutDevice();
 	}
+	_audioDeviceBuffer.SetPlayoutSampleRate(kPlayoutFrequency);
+	_audioDeviceBuffer.SetPlayoutChannels(_playoutChannels);
 	_audioDeviceBuffer.StartPlayout();
 	startPlayingOnThread();
 	return 0;

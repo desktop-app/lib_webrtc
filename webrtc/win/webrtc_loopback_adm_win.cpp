@@ -884,7 +884,7 @@ void AudioDeviceLoopbackWin::processData() {
 		const auto deviceSamplesBefore = deviceSamplesCount - framesAvailable;
 		const auto fullDelay = counterDelta
 			+ (deviceSamplesBefore * _deviceFrequencyMultiplier);
-		return now - crl::time(std::round(fullDelay / 10'000.));
+		return now - crl::time(base::SafeRound(fullDelay / 10'000.));
 	};
 
 	while (samplesAvailable >= kWantedPartSize) {

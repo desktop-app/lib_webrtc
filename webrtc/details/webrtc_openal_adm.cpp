@@ -799,8 +799,8 @@ crl::time AudioDeviceOpenAL::countExactQueuedMsForLatency(
 		= (double((queuedSamples - processedInOpenAL) >> (32 - 10))
 			/ double(kPlayoutFrequency * (1 << 10)));
 
-	const auto queuedTotal = crl::time(
-		std::round((secondsQueuedInDevice + secondsQueuedInOpenAL) * 1'000));
+	const auto queuedTotal = crl::time(base::SafeRound(
+		(secondsQueuedInDevice + secondsQueuedInOpenAL) * 1'000));
 
 	return countExact
 		? queuedTotal

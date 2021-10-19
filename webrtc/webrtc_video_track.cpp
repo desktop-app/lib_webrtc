@@ -328,7 +328,7 @@ bool VideoTrack::Sink::decodeFrame(
 		0
 	};
 	uint8_t *dst[AV_NUM_DATA_POINTERS] = { frame->original.bits(), nullptr };
-	int dstLineSize[AV_NUM_DATA_POINTERS] = { frame->original.bytesPerLine(), 0 };
+	int dstLineSize[AV_NUM_DATA_POINTERS] = { int(frame->original.bytesPerLine()), 0 };
 
 	sws_scale(
 		_decodeContext.get(),

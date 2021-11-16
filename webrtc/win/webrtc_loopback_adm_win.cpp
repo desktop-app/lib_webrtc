@@ -70,9 +70,8 @@ void SetStringToArray(const std::string &string, char *array, int size) {
 }
 
 [[nodiscard]] auto CreateAudioProcessing()
--> std::unique_ptr<webrtc::AudioProcessing> {
-	auto result = std::unique_ptr<webrtc::AudioProcessing>(
-		webrtc::AudioProcessingBuilder().Create(webrtc::Config()));
+-> rtc::scoped_refptr<webrtc::AudioProcessing> {
+	auto result = webrtc::AudioProcessingBuilder().Create(webrtc::Config());
 
 	auto config = webrtc::AudioProcessing::Config();
 	config.echo_canceller.enabled = true;

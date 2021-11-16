@@ -8,6 +8,7 @@
 
 #include "modules/audio_device/include/audio_device.h"
 #include "modules/audio_device/audio_device_buffer.h"
+#include "api/scoped_refptr.h"
 
 #include <AudioClient.h>
 #include <MMDeviceAPI.h>
@@ -164,7 +165,7 @@ private:
 	winrt::com_ptr<IAudioClient> _audioRenderClientForLoopback;
 	winrt::com_ptr<IAudioCaptureClient> _audioCaptureClient;
 
-	std::unique_ptr<webrtc::AudioProcessing> _audioProcessing;
+	rtc::scoped_refptr<webrtc::AudioProcessing> _audioProcessing;
 	std::unique_ptr<webrtc::AudioFrame> _capturedFrame;
 	std::unique_ptr<webrtc::AudioFrame> _renderedFrame;
 

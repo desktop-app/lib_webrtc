@@ -974,7 +974,10 @@ void AudioDeviceOpenAL::startPlayingOnThread() {
 			alSourcei(source, AL_SOURCE_RELATIVE, 1);
 			alSourcei(source, AL_ROLLOFF_FACTOR, 0);
 			if (alIsExtensionPresent("AL_SOFT_direct_channels_remix")) {
-				alSourcei(source, alGetEnumValue("AL_DIRECT_CHANNELS_SOFT"), 2);
+				alSourcei(
+					source,
+					alGetEnumValue("AL_DIRECT_CHANNELS_SOFT"),
+					alcGetEnumValue(nullptr, "AL_REMIX_UNMATCHED_SOFT"));
 			}
 			_data->source = source;
 			alGenBuffers(_data->buffers.size(), _data->buffers.data());

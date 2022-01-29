@@ -71,7 +71,7 @@ void SetStringToArray(const std::string &string, char *array, int size) {
 
 [[nodiscard]] auto CreateAudioProcessing()
 -> rtc::scoped_refptr<webrtc::AudioProcessing> {
-	auto result = webrtc::AudioProcessingBuilder().Create(webrtc::Config());
+	auto result = webrtc::AudioProcessingBuilder().Create();
 
 	auto config = webrtc::AudioProcessing::Config();
 	config.echo_canceller.enabled = true;

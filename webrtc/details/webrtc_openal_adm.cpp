@@ -604,7 +604,7 @@ void AudioDeviceOpenAL::handleEvent(
 		const ALchar *message) {
 	if (eventType == kAL_EVENT_TYPE_DISCONNECTED_SOFT && _thread) {
 		const auto weak = QPointer<QObject>(&_data->context);
-		_thread->PostTask(RTC_FROM_HERE, [=] {
+		_thread->PostTask([=] {
 			if (weak) {
 				restartRecording();
 			}
@@ -1067,7 +1067,7 @@ void AudioDeviceOpenAL::restartRecordingQueued() {
 		return;
 	}
 	const auto weak = QPointer<QObject>(&_data->context);
-	_thread->PostTask(RTC_FROM_HERE, [=] {
+	_thread->PostTask([=] {
 		if (weak) {
 			restartRecording();
 			InvokeQueued(&_data->context, [=] {
@@ -1104,7 +1104,7 @@ void AudioDeviceOpenAL::restartPlayoutQueued() {
 		return;
 	}
 	const auto weak = QPointer<QObject>(&_data->context);
-	_thread->PostTask(RTC_FROM_HERE, [=] {
+	_thread->PostTask([=] {
 		if (weak) {
 			restartPlayout();
 		}

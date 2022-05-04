@@ -55,4 +55,6 @@ public:
 [[nodiscard]] bool DesktopCaptureAllowed();
 [[nodiscard]] std::optional<QString> UniqueDesktopCaptureSource();
 
+[[nodiscard]] bool InitPipewireStubs();
+
 } // namespace Webrtc

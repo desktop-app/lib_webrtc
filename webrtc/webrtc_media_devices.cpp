@@ -15,6 +15,10 @@
 #include "base/platform/base_platform_info.h"
 #include "crl/crl_async.h"
 
+#ifdef WEBRTC_LINUX
+#include "modules/desktop_capture/linux/wayland/shared_screencast_stream.h"
+#endif // WEBRTC_LINUX
+
 #ifdef WEBRTC_MAC
 //#define MAC_TRACK_MEDIA_DEVICES
 #endif // WEBRTC_MAC
@@ -220,6 +224,14 @@ std::optional<QString> UniqueDesktopCaptureSource() {
 	return LinuxUniqueDesktopCaptureSource();
 #else // WEBRTC_LINUX
 	return std::nullopt;
+#endif // WEBRTC_LINUX
+}
+
+bool InitPipewireStubs() {
+#ifdef WEBRTC_LINUX
+	return webrtc::InitPipewireStubs();
+#else // WEBRTC_LINUX
+	return true;
 #endif // WEBRTC_LINUX
 }
 

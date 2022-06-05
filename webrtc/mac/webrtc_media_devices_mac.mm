@@ -6,7 +6,7 @@
 //
 #include "webrtc/mac/webrtc_media_devices_mac.h"
 
-#include "modules/audio_device/include/audio_device_defines.h"
+#include <modules/audio_device/include/audio_device_defines.h>
 
 #import <AVFoundation/AVFoundation.h>
 #import <IOKit/hidsystem/IOHIDLib.h>

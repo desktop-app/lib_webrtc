@@ -229,11 +229,11 @@ std::optional<QString> UniqueDesktopCaptureSource() {
 }
 
 bool InitPipewireStubs() {
-#ifdef WEBRTC_LINUX
+#ifdef WEBRTC_USE_PIPEWIRE
 	return webrtc::InitPipewireStubs();
-#else // WEBRTC_LINUX
+#else // WEBRTC_USE_PIPEWIRE
 	return true;
-#endif // WEBRTC_LINUX
+#endif // WEBRTC_USE_PIPEWIRE
 }
 
 } // namespace Webrtc

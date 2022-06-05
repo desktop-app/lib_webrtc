@@ -6,9 +6,9 @@
 //
 #pragma once
 
-#include "modules/audio_device/include/audio_device.h"
-#include "modules/audio_device/audio_device_buffer.h"
-#include "api/scoped_refptr.h"
+#include <modules/audio_device/include/audio_device.h>
+#include <modules/audio_device/audio_device_buffer.h>
+#include <api/scoped_refptr.h>
 
 #include <AudioClient.h>
 #include <MMDeviceAPI.h>

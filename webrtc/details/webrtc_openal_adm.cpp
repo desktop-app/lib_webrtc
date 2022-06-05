@@ -14,8 +14,8 @@
 #undef slots
 #undef signals
 
-#include "rtc_base/logging.h"
-#include "rtc_base/thread.h"
+#include <rtc_base/logging.h>
+#include <rtc_base/thread.h>
 #include <QtCore/QPointer>
 #include <QtCore/QThread>
 

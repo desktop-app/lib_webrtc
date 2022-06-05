@@ -6,8 +6,8 @@
 //
 #pragma once
 
-#include "modules/audio_device/include/audio_device.h"
-#include "modules/audio_device/audio_device_buffer.h"
+#include <modules/audio_device/include/audio_device.h>
+#include <modules/audio_device/audio_device_buffer.h>
 
 #include <crl/crl_time.h>
 #include <al.h>

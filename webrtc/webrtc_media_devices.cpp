@@ -16,9 +16,9 @@
 #include <modules/video_capture/video_capture_factory.h>
 #include <modules/audio_device/include/audio_device_factory.h>
 
-#ifdef WEBRTC_LINUX
+#ifdef WEBRTC_USE_PIPEWIRE
 #include <modules/desktop_capture/linux/wayland/shared_screencast_stream.h>
-#endif // WEBRTC_LINUX
+#endif // WEBRTC_USE_PIPEWIRE
 
 #ifdef WEBRTC_MAC
 //#define MAC_TRACK_MEDIA_DEVICES
@@ -221,11 +221,11 @@ bool DesktopCaptureAllowed() {
 }
 
 std::optional<QString> UniqueDesktopCaptureSource() {
-#ifdef WEBRTC_LINUX
+#ifdef WEBRTC_USE_PIPEWIRE
 	return LinuxUniqueDesktopCaptureSource();
-#else // WEBRTC_LINUX
+#else // WEBRTC_USE_PIPEWIRE
 	return std::nullopt;
-#endif // WEBRTC_LINUX
+#endif // WEBRTC_USE_PIPEWIRE
 }
 
 bool InitPipewireStubs() {

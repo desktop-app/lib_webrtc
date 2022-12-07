@@ -6,7 +6,7 @@
 
 add_library(lib_webrtc OBJECT)
 add_library(desktop-app::lib_webrtc ALIAS lib_webrtc)
-init_target(lib_webrtc)
+init_target(lib_webrtc ltcg)
 
 get_filename_component(src_loc . REALPATH)
 

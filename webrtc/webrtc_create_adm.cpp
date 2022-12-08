@@ -8,7 +8,7 @@
 
 #include "webrtc/details/webrtc_openal_adm.h"
 
-#include <rtc_base/ref_counted_object.h>
+#include <api/make_ref_counted.h>
 #include <modules/audio_device/include/audio_device_factory.h>
 
 #ifdef WEBRTC_WIN

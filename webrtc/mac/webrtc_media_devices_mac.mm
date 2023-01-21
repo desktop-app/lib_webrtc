@@ -10,6 +10,7 @@
 
 #import <AVFoundation/AVFoundation.h>
 #import <IOKit/hidsystem/IOHIDLib.h>
+#import <CoreAudio/CoreAudio.h>
 
 namespace Webrtc {
 namespace {

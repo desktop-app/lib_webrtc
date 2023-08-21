@@ -137,6 +137,8 @@ private:
 
 	int restartPlayout();
 	int restartRecording();
+	void reopenPlayout();
+	void reopenRecording();
 	void restartRecordingQueued();
 	void restartPlayoutQueued();
 	bool validateRecordingDeviceId();
@@ -166,6 +168,12 @@ private:
 		ALuint param,
 		ALsizei length,
 		const ALchar *message);
+	void handleALCEvent(
+		ALCenum eventType,
+		ALCenum deviceType,
+		ALCdevice* device,
+		ALCsizei length,
+		const ALchar* message);
 
 	[[nodiscard]] crl::time countExactQueuedMsForLatency(
 		crl::time now,
@@ -179,6 +187,7 @@ private:
 	ALCdevice *_playoutDevice = nullptr;
 	ALCcontext *_playoutContext = nullptr;
 	std::string _playoutDeviceId;
+	bool _playoutIsDefaultDevice = false;
 	crl::time _playoutLatency = 0;
 	int _playoutChannels = 2;
 	bool _playoutInitialized = false;
@@ -186,6 +195,7 @@ private:
 
 	ALCdevice *_recordingDevice = nullptr;
 	std::string _recordingDeviceId;
+	bool _recordingIsDefaultDevice = false;
 	crl::time _recordingLatency = 0;
 	bool _recordingInitialized = false;
 	bool _recordingFailed = false;

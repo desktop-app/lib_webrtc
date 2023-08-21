@@ -55,7 +55,10 @@ auto kAL_EVENT_TYPE_DISCONNECTED_SOFT = ALenum();
 auto kAL_SAMPLE_OFFSET_CLOCK_SOFT = ALenum();
 auto kAL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT = ALenum();
 
-auto kALC_DEVICE_LATENCY_SOFT = ALenum();
+auto kALC_DEVICE_LATENCY_SOFT = ALCenum();
+auto kALC_EVENT_TYPE_DEFAULT_DEVICE_CHANGED_SOFT = ALCenum();
+auto kALC_PLAYBACK_DEVICE_SOFT = ALCenum();
+auto kALC_CAPTURE_DEVICE_SOFT = ALCenum();
 
 using AL_INT64_TYPE = std::int64_t;
 
@@ -69,6 +72,16 @@ using ALEVENTPROCSOFT = void(*)(
 using ALEVENTCALLBACKSOFT = void(*)(
 	ALEVENTPROCSOFT callback,
 	void *userParam);
+using ALCEVENTPROCTYPESOFT = void(*)(
+	ALCenum eventType,
+	ALCenum deviceType,
+	ALCdevice* device,
+	ALCsizei length,
+	const ALCchar* message,
+	void* userParam);
+using ALCEVENTCALLBACKSOFT = void(*)(
+	ALCEVENTPROCTYPESOFT callback,
+	void* userParam);
 using ALCSETTHREADCONTEXT = ALCboolean(*)(ALCcontext *context);
 using ALGETSOURCEI64VSOFT = void(*)(
 	ALuint source,
@@ -79,11 +92,22 @@ using ALCGETINTEGER64VSOFT = void(*)(
 	ALCenum pname,
 	ALsizei size,
 	AL_INT64_TYPE *values);
+using ALCREOPENDEVICESOFT = ALCboolean(*)(
+	ALCdevice* device,
+	const ALCchar* deviceName,
+	const ALCint* attribs);
+using ALCEVENTCONTROLSOFT = ALCboolean(*)(
+	ALCsizei count,
+	const ALCenum* events,
+	ALCboolean enable);
 
 ALEVENTCALLBACKSOFT alEventCallbackSOFT/* = nullptr*/;
 ALCSETTHREADCONTEXT alcSetThreadContext/* = nullptr*/;
 ALGETSOURCEI64VSOFT alGetSourcei64vSOFT/* = nullptr*/;
 ALCGETINTEGER64VSOFT alcGetInteger64vSOFT/* = nullptr*/;
+ALCEVENTCALLBACKSOFT alcEventCallbackSOFT/* = nullptr*/;
+ALCREOPENDEVICESOFT alcReopenDeviceSOFT/*= nullptr*/;
+ALCEVENTCONTROLSOFT alcEventControlSOFT/*= nullptr*/;
 
 [[nodiscard]] bool Failed(ALCdevice *device) {
 	if (auto code = alcGetError(device); code != ALC_NO_ERROR) {
@@ -268,6 +292,15 @@ int32_t AudioDeviceOpenAL::Init() {
 	alcGetInteger64vSOFT = (ALCGETINTEGER64VSOFT)alcGetProcAddress(
 		nullptr,
 		"alcGetInteger64vSOFT");
+	alcEventCallbackSOFT = (ALCEVENTCALLBACKSOFT)alcGetProcAddress(
+		nullptr,
+		"alcEventCallbackSOFT");
+	alcReopenDeviceSOFT = (ALCREOPENDEVICESOFT)alcGetProcAddress(
+		nullptr,
+		"alcReopenDeviceSOFT");
+	alcEventControlSOFT = (ALCEVENTCONTROLSOFT)alcGetProcAddress(
+		nullptr,
+		"alcEventControlSOFT");
 
 #define RESOLVE_AL_ENUM(ENUM) k##ENUM = alGetEnumValue(#ENUM)
 #define RESOLVE_ALC_ENUM(ENUM) k##ENUM = alcGetEnumValue(nullptr, #ENUM)
@@ -280,6 +313,9 @@ int32_t AudioDeviceOpenAL::Init() {
 	RESOLVE_AL_ENUM(AL_SAMPLE_OFFSET_CLOCK_SOFT);
 	RESOLVE_AL_ENUM(AL_SAMPLE_OFFSET_CLOCK_EXACT_SOFT);
 	RESOLVE_ALC_ENUM(ALC_DEVICE_LATENCY_SOFT);
+	RESOLVE_ALC_ENUM(ALC_EVENT_TYPE_DEFAULT_DEVICE_CHANGED_SOFT);
+	RESOLVE_ALC_ENUM(ALC_PLAYBACK_DEVICE_SOFT);
+	RESOLVE_ALC_ENUM(ALC_CAPTURE_DEVICE_SOFT);
 #undef RESOLVE_ALC_ENUM
 #undef RESOLVE_AL_ENUM
 
@@ -452,11 +488,13 @@ int32_t AudioDeviceOpenAL::SetPlayoutDevice(uint16_t index) {
 		index,
 		nullptr,
 		&_playoutDeviceId);
+	_playoutIsDefaultDevice = false;
 	return result ? result : restartPlayout();
 }
 
 int32_t AudioDeviceOpenAL::SetPlayoutDevice(WindowsDeviceType /*device*/) {
 	_playoutDeviceId = ComputeDefaultDeviceId(ALC_DEFAULT_DEVICE_SPECIFIER);
+	_playoutIsDefaultDevice = true;
 	return _playoutDeviceId.empty() ? -1 : restartPlayout();
 }
 
@@ -484,12 +522,14 @@ int32_t AudioDeviceOpenAL::SetRecordingDevice(uint16_t index) {
 		index,
 		nullptr,
 		&_recordingDeviceId);
+	_recordingIsDefaultDevice = false;
 	return result ? result : restartRecording();
 }
 
 int32_t AudioDeviceOpenAL::SetRecordingDevice(WindowsDeviceType /*device*/) {
 	_recordingDeviceId = ComputeDefaultDeviceId(
 		ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER);
+	_recordingIsDefaultDevice = true;
 	return _recordingDeviceId.empty() ? -1 : restartRecording();
 }
 
@@ -593,6 +633,26 @@ void AudioDeviceOpenAL::openPlayoutDevice() {
 					message);
 			}, this);
 		}
+		if (alcEventCallbackSOFT) {
+			alcEventCallbackSOFT([](
+				ALCenum eventType,
+				ALCenum deviceType,
+				ALCdevice* device,
+				ALCsizei length,
+				const ALCchar* message,
+				void* that) {
+					static_cast<AudioDeviceOpenAL*>(that)->handleALCEvent(
+						eventType,
+						deviceType,
+						device,
+						length,
+						message);
+				}, this);
+		}
+		if (alcEventControlSOFT) {
+			const std::array<ALCenum, 1> events = { kALC_EVENT_TYPE_DEFAULT_DEVICE_CHANGED_SOFT };
+			alcEventControlSOFT(events.size(), events.data(), ALC_TRUE);
+		}
 	});
 }
 
@@ -609,6 +669,25 @@ void AudioDeviceOpenAL::handleEvent(
 				restartRecording();
 			}
 		});
+	}
+}
+
+void AudioDeviceOpenAL::handleALCEvent(
+	ALCenum eventType,
+	ALCenum deviceType,
+	ALCdevice* device,
+	ALCsizei length,
+	const ALchar* message) {
+	if (eventType == kALC_EVENT_TYPE_DEFAULT_DEVICE_CHANGED_SOFT && _thread) {
+		const auto weak = QPointer<QObject>(&_data->context);
+		_thread->PostTask([=] {
+			if (weak) {
+				if (deviceType == kALC_PLAYBACK_DEVICE_SOFT && _playoutIsDefaultDevice)
+					reopenPlayout();
+				else if (deviceType == kALC_CAPTURE_DEVICE_SOFT && _recordingIsDefaultDevice)
+					reopenRecording();
+			}
+			});
 	}
 }
 
@@ -1021,6 +1100,9 @@ void AudioDeviceOpenAL::stopPlayingOnThread() {
 			if (alEventCallbackSOFT) {
 				alEventCallbackSOFT(nullptr, nullptr);
 			}
+			if (alcEventCallbackSOFT) {
+				alcEventCallbackSOFT(nullptr, nullptr);
+			}
 			alcSetThreadContext(nullptr);
 		});
 		if (!_data->playing) {
@@ -1075,6 +1157,26 @@ void AudioDeviceOpenAL::restartRecordingQueued() {
 			});
 		}
 	});
+}
+
+void AudioDeviceOpenAL::reopenRecording() {
+	if (!alcReopenDeviceSOFT)
+		return;
+
+	if (!_recordingInitialized)
+		return;
+
+	alcReopenDeviceSOFT(_recordingDevice, nullptr, nullptr);
+}
+
+void AudioDeviceOpenAL::reopenPlayout() {
+	if (!alcReopenDeviceSOFT)
+		return;
+
+	if (!_playoutInitialized)
+		return;
+
+	alcReopenDeviceSOFT(_playoutDevice, nullptr, nullptr);
 }
 
 int AudioDeviceOpenAL::restartRecording() {

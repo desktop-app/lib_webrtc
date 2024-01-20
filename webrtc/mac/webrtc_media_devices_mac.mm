@@ -6,6 +6,8 @@
 //
 #include "webrtc/mac/webrtc_media_devices_mac.h"
 
+#include "webrtc/webrtc_device_common.h"
+
 #include <modules/audio_device/include/audio_device_defines.h>
 
 #import <AVFoundation/AVFoundation.h>
@@ -20,7 +22,7 @@ namespace {
 }
 
 [[nodiscard]] bool IsDefault(const QString &id) {
-	return id.isEmpty() || (id == "default");
+	return id.isEmpty() || (id == kDefaultDeviceId);
 }
 
 auto AudioOutputDevicePropertyAddress = AudioObjectPropertyAddress{

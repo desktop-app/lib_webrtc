@@ -6,6 +6,7 @@
 //
 #include "webrtc/webrtc_audio_input_tester.h"
 
+#include "webrtc/webrtc_device_common.h"
 #include "webrtc/webrtc_create_adm.h"
 #include "crl/crl_object_on_thread.h"
 #include "crl/crl_async.h"
@@ -110,7 +111,7 @@ void AudioInputTester::Impl::setDeviceId(const QString &deviceId) {
 			_adm->StartRecording();
 		}
 	});
-	if (deviceId == u"default"_q || deviceId.isEmpty()) {
+	if (deviceId == kDefaultDeviceId || deviceId.isEmpty()) {
 		return;
 	}
 	const auto count = _adm

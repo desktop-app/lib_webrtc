@@ -25,6 +25,7 @@ public:
 		DeviceType type,
 		QString id,
 		DeviceStateChange state) = 0;
+	virtual void devicesForceRefresh(DeviceType type) = 0;
 };
 
 } // namespace Webrtc::Platform
@@ -36,6 +37,7 @@ public:
 	Environment();
 	~Environment();
 
+	void forceRefresh(DeviceType type);
 	[[nodiscard]] QString defaultId(DeviceType type) const;
 	[[nodiscard]] std::vector<DeviceInfo> devices(DeviceType type) const;
 	[[nodiscard]] rpl::producer<DevicesChange> changes(
@@ -77,6 +79,7 @@ private:
 
 	[[nodiscard]] static int TypeToIndex(DeviceType type);
 
+	[[nodiscard]] Devices resolveDevices(DeviceType type) const;
 	[[nodiscard]] bool synced(DeviceType type) const;
 	void validateAfterDefaultChange(DeviceType type);
 	void validateAfterListChange(DeviceType type);
@@ -84,6 +87,7 @@ private:
 	void maybeNotify(DeviceType type);
 	void logSyncError(DeviceType type);
 	void logState(DeviceType type, LogType log);
+
 	void defaultChanged(
 		DeviceType type,
 		DeviceChangeReason reason,
@@ -92,6 +96,7 @@ private:
 		DeviceType type,
 		QString id,
 		DeviceStateChange state) override;
+	void devicesForceRefresh(DeviceType type) override;
 
 	const std::unique_ptr<Platform::Environment> _platform;
 

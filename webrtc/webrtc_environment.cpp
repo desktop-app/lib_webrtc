@@ -35,18 +35,9 @@ Environment::Environment()
 : _platform(
 	Platform::CreateEnvironment((Platform::EnvironmentDelegate*)this))
 , _devices{
-	Devices{
-		.defaultId = _platform->defaultId(DeviceType::Playback),
-		.list = _platform->devices(DeviceType::Playback),
-	},
-	Devices{
-		.defaultId = _platform->defaultId(DeviceType::Capture),
-		.list = _platform->devices(DeviceType::Capture),
-	},
-	Devices{
-		.defaultId = _platform->defaultId(DeviceType::Camera),
-		.list = _platform->devices(DeviceType::Camera),
-	},
+	resolveDevices(DeviceType::Playback),
+	resolveDevices(DeviceType::Capture),
+	resolveDevices(DeviceType::Camera),
 } {
 	using Type = DeviceType;
 	for (const auto type : { Type::Playback, Type::Capture, Type::Camera }) {
@@ -65,6 +56,14 @@ int Environment::TypeToIndex(DeviceType type) {
 
 	Ensures(result >= 0 && result < kTypeCount);
 	return result;
+}
+
+Environment::Devices Environment::resolveDevices(DeviceType type) const {
+	return {
+		.defaultId = _platform->defaultId(type),
+		.list = _platform->devices(type),
+		.refreshFullListOnChange = _platform->refreshFullListOnChange(type),
+	};
 }
 
 QString Environment::defaultId(DeviceType type) const {
@@ -106,6 +105,31 @@ rpl::producer<std::vector<DeviceInfo>> Environment::devicesValue(
 	});
 }
 
+void Environment::forceRefresh(DeviceType type) {
+	auto &devices = _devices[TypeToIndex(type)];
+	devices.defaultChangeFrom = std::exchange(
+		devices.defaultId,
+		_platform->defaultId(type));
+	const auto &old = *devices.defaultChangeFrom;
+	const auto newIsInOldList = ranges::contains(
+		devices.list,
+		devices.defaultId,
+		&DeviceInfo::id);
+	refreshDevices(type);
+	const auto oldIsInNewList = ranges::contains(
+		devices.list,
+		old,
+		&DeviceInfo::id);
+	if (devices.defaultId != old) {
+		devices.defaultChangeReason = !oldIsInNewList
+			? DeviceChangeReason::Disconnected
+			: !newIsInOldList
+			? DeviceChangeReason::Connected
+			: DeviceChangeReason::Manual;
+	}
+	maybeNotify(type);
+}
+
 bool Environment::desktopCaptureAllowed() const {
 	return _platform->desktopCaptureAllowed();
 }
@@ -118,19 +142,26 @@ void Environment::defaultChanged(
 		DeviceType type,
 		DeviceChangeReason reason,
 		QString nowId) {
+	const auto guard = gsl::finally([&] {
+		validateAfterDefaultChange(type);
+		maybeNotify(type);
+	});
 	auto &devices = _devices[TypeToIndex(type)];
 	devices.defaultChangeFrom = std::exchange(
 		devices.defaultId,
 		std::move(nowId));
-	devices.defaultChangeReason = DeviceChangeReason::Manual;
-	validateAfterDefaultChange(type);
-	maybeNotify(type);
+	devices.defaultChangeReason = reason;
 }
 
 void Environment::deviceStateChanged(
 		DeviceType type,
 		QString id,
 		DeviceStateChange state) {
+	const auto guard = gsl::finally([&] {
+		validateAfterListChange(type);
+		maybeNotify(type);
+	});
+
 	auto &devices = _devices[TypeToIndex(type)];
 	if (devices.refreshFullListOnChange) {
 		refreshDevices(type);
@@ -163,8 +194,10 @@ void Environment::deviceStateChanged(
 			devices.listChanged = true;
 		}
 	}
-	validateAfterListChange(type);
-	maybeNotify(type);
+}
+
+void Environment::devicesForceRefresh(DeviceType type) {
+	forceRefresh(type);
 }
 
 bool Environment::synced(DeviceType type) const {

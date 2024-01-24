@@ -4,7 +4,7 @@
 // For license and copyright information please follow this link:
 // https://github.com/desktop-app/legal/blob/master/LEGAL
 //
-#include "webrtc/win/webrtc_loopback_adm_win.h"
+#include "webrtc/platform/win/webrtc_loopback_adm_win.h"
 
 #include <rtc_base/logging.h>
 #include <modules/audio_processing/include/audio_processing.h>

@@ -8,6 +8,7 @@
 
 #include "webrtc/platform/webrtc_platform_environment.h"
 
+#include "webrtc/details/webrtc_environment_video_capture.h"
 #include "base/platform/win/base_windows_winrt.h"
 
 struct IMMDeviceEnumerator;
@@ -37,6 +38,7 @@ private:
 	class Client;
 
 	const not_null<EnvironmentDelegate*> _delegate;
+	details::EnvironmentVideoCapture _cameraFallback;
 
 	bool _comInitialized = false;
 	winrt::com_ptr<IMMDeviceEnumerator> _enumerator;

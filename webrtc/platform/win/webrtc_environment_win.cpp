@@ -9,7 +9,6 @@
 #include "base/platform/win/base_windows_co_task_mem.h"
 #include "base/weak_ptr.h"
 #include "webrtc/webrtc_environment.h"
-#include "webrtc/webrtc_media_devices.h"
 
 #include <MMDeviceAPI.h>
 #include <winrt/base.h>
@@ -122,7 +121,8 @@ HRESULT STDMETHODCALLTYPE EnvironmentWin::Client::OnDefaultDeviceChanged(
 }
 
 EnvironmentWin::EnvironmentWin(not_null<EnvironmentDelegate*> delegate)
-: _delegate(delegate) {
+: _delegate(delegate)
+, _cameraFallback(delegate) {
 	using namespace base::WinRT;
 	_enumerator = TryCreateInstance<IMMDeviceEnumerator>(
 		CLSID_MMDeviceEnumerator);
@@ -168,8 +168,7 @@ EnvironmentWin::~EnvironmentWin() {
 
 QString EnvironmentWin::defaultId(DeviceType type) {
 	if (type == DeviceType::Camera) {
-		const auto list = GetVideoInputList();
-		return list.empty() ? QString() : list.front().id;
+		return _cameraFallback.defaultId(type);
 	} else if (!_enumerator) {
 		return {};
 	}
@@ -223,16 +222,7 @@ void EnvironmentWin::processDeviceStateChange(
 
 DeviceInfo EnvironmentWin::device(DeviceType type, const QString &id) {
 	if (type == DeviceType::Camera) {
-		const auto list = GetVideoInputList();
-		const auto i = ranges::find(list, id, &VideoInput::id);
-		if (i != end(list)) {
-			return {
-				.id = id,
-				.name = i->name,
-				.type = type,
-			};
-		}
-		return {};
+		return _cameraFallback.device(type, id);
 	} else if (!_enumerator) {
 		return {};
 	}
@@ -275,17 +265,7 @@ DeviceInfo EnvironmentWin::device(DeviceType type, const QString &id) {
 
 std::vector<DeviceInfo> EnvironmentWin::devices(DeviceType type) {
 	if (type == DeviceType::Camera) {
-		const auto list = GetVideoInputList();
-		auto result = std::vector<DeviceInfo>();
-		result.reserve(list.size());
-		for (const auto &device : list) {
-			result.push_back({
-				.id = device.id,
-				.name = device.name,
-				.type = type,
-			});
-		}
-		return result;
+		return _cameraFallback.devices(type);
 	} else if (!_enumerator) {
 		return {};
 	}
@@ -358,6 +338,9 @@ std::vector<DeviceInfo> EnvironmentWin::devices(DeviceType type) {
 }
 
 bool EnvironmentWin::refreshFullListOnChange(DeviceType type) {
+	if (type == DeviceType::Camera) {
+		return _cameraFallback.refreshFullListOnChange(type);
+	}
 	return false;
 }
 

@@ -14,16 +14,30 @@
 #include <alc.h>
 #include <atomic>
 
+#include <QtCore/QMutex>
+
 namespace rtc {
 class Thread;
 } // namespace rtc
 
+namespace Webrtc {
+enum class DeviceType : uchar;
+} // namespace Webrtc
+
 namespace Webrtc::details {
+
+struct DevicesIds {
+	QMutex mutex;
+	QString playbackDeviceId;
+	QString captureDeviceId;
+};
 
 class AudioDeviceOpenAL : public webrtc::AudioDeviceModule {
 public:
 	explicit AudioDeviceOpenAL(webrtc::TaskQueueFactory *taskQueueFactory);
 	~AudioDeviceOpenAL();
+
+	[[nodiscard]] Fn<void(DeviceType, QString)> setDeviceIdCallback();
 
 	int32_t ActiveAudioLayer(AudioLayer *audioLayer) const override;
 	int32_t RegisterAudioCallback(
@@ -139,8 +153,6 @@ private:
 	int restartRecording();
 	void restartRecordingQueued();
 	void restartPlayoutQueued();
-	bool validateRecordingDeviceId();
-	bool validatePlayoutDeviceId();
 
 	void ensureThreadStarted();
 	void startCaptureOnThread();
@@ -176,16 +188,16 @@ private:
 	webrtc::AudioDeviceBuffer _audioDeviceBuffer;
 	std::unique_ptr<Data> _data;
 
+	std::shared_ptr<DevicesIds> _devicesIds;
+
 	ALCdevice *_playoutDevice = nullptr;
 	ALCcontext *_playoutContext = nullptr;
-	std::string _playoutDeviceId;
 	crl::time _playoutLatency = 0;
 	int _playoutChannels = 2;
 	bool _playoutInitialized = false;
 	bool _playoutFailed = false;
 
 	ALCdevice *_recordingDevice = nullptr;
-	std::string _recordingDeviceId;
 	crl::time _recordingLatency = 0;
 	bool _recordingInitialized = false;
 	bool _recordingFailed = false;

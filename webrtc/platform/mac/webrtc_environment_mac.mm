@@ -8,9 +8,11 @@
 
 #include "base/weak_ptr.h"
 #include "webrtc/webrtc_environment.h"
-#include "webrtc/webrtc_media_devices.h"
-#include "webrtc/mac/webrtc_media_devices_mac.h"
 
+#include <modules/audio_device/include/audio_device_defines.h>
+
+#import <AVFoundation/AVFoundation.h>
+#import <IOKit/hidsystem/IOHIDLib.h>
 #import <CoreAudio/CoreAudio.h>
 
 namespace Webrtc::Platform {
@@ -71,14 +73,16 @@ PropertyMonitor::PropertyMonitor(
 , _method(method) {
 }
 
-void PropertyMonitor::registerEnvironment(not_null<EnvironmentMac*> environment) {
+void PropertyMonitor::registerEnvironment(
+		not_null<EnvironmentMac*> environment) {
 	if (empty(_list)) {
 		subscribe();
 	}
 	_list.push_back(environment);
 }
 
-void PropertyMonitor::unregisterEnvironment(not_null<EnvironmentMac*> environment) {
+void PropertyMonitor::unregisterEnvironment(
+		not_null<EnvironmentMac*> environment) {
 	_list.erase(ranges::remove(_list, environment), end(_list));
 	if (empty(_list)) {
 		unsubscribe();
@@ -175,7 +179,10 @@ OSStatus PropertyMonitor::Callback(
 
 [[nodiscard]] AudioDeviceID GetDeviceByUID(const QString &id) {
 	const auto utf = id.toUtf8();
-	auto uid = CFStringCreateWithCString(NULL, utf.data(), kCFStringEncodingUTF8);
+	auto uid = CFStringCreateWithCString(
+		nullptr,
+		utf.data(),
+		kCFStringEncodingUTF8);
 	if (!uid) {
 		return kAudioObjectUnknown;
 	}
@@ -207,7 +214,9 @@ OSStatus PropertyMonitor::Callback(
 	return (result == noErr) ? deviceId : kAudioObjectUnknown;
 }
 
-[[nodiscard]] QString GetDeviceName(DeviceType type, AudioDeviceID deviceId) {
+[[nodiscard]] QString GetDeviceName(
+		DeviceType type,
+		AudioDeviceID deviceId) {
 	auto name = (CFStringRef)nullptr;
 	const auto guard = gsl::finally([&] {
 		if (name) {
@@ -301,6 +310,27 @@ OSStatus PropertyMonitor::Callback(
 	return (result == noErr) ? list : std::vector<AudioDeviceID>();
 }
 
+[[nodiscard]] QString NS2QString(NSString *text) {
+	return QString::fromUtf8(
+		[text cStringUsingEncoding:NSUTF8StringEncoding]);
+}
+
+[[nodiscard]] QString CaptureDeviceId(AVCaptureDevice *device) {
+	return device ? NS2QString([device uniqueID]) : QString();
+}
+
+[[nodiscard]] DeviceInfo CaptureDeviceInfo(AVCaptureDevice *device) {
+	const auto id = CaptureDeviceId(device);
+	if (id.isEmpty()) {
+		return {};
+	}
+	return {
+		.id = id,
+		.name = NS2QString([device localizedName]),
+		.type = DeviceType::Camera,
+	};
+}
+
 } // namespace
 
 EnvironmentMac::EnvironmentMac(not_null<EnvironmentDelegate*> delegate)
@@ -333,8 +363,8 @@ void EnvironmentMac::audioDeviceListChanged() {
 
 QString EnvironmentMac::defaultId(DeviceType type) {
 	if (type == DeviceType::Camera) {
-		const auto list = MacGetVideoInputList();
-		return list.empty() ? QString() : list.front().id;
+		return CaptureDeviceId(
+			[AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo]);
 	}
 
 	auto deviceId = AudioDeviceID(kAudioDeviceUnknown);
@@ -358,14 +388,12 @@ QString EnvironmentMac::defaultId(DeviceType type) {
 
 DeviceInfo EnvironmentMac::device(DeviceType type, const QString &id) {
 	if (type == DeviceType::Camera) {
-		const auto list = MacGetVideoInputList();
-		const auto i = ranges::find(list, id, &VideoInput::id);
-		if (i != end(list)) {
-			return {
-				.id = id,
-				.name = i->name,
-				.type = type,
-			};
+		NSArray<AVCaptureDevice*> *devices
+			= [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
+		for (AVCaptureDevice *device in devices) {
+			if (CaptureDeviceId(device) == id) {
+				return CaptureDeviceInfo(device);
+			}
 		}
 		return {};
 	}
@@ -384,15 +412,19 @@ DeviceInfo EnvironmentMac::device(DeviceType type, const QString &id) {
 
 std::vector<DeviceInfo> EnvironmentMac::devices(DeviceType type) {
 	if (type == DeviceType::Camera) {
-		const auto list = MacGetVideoInputList();
 		auto result = std::vector<DeviceInfo>();
-		result.reserve(list.size());
-		for (const auto &device : list) {
-			result.push_back({
-				.id = device.id,
-				.name = device.name,
-				.type = type,
-			});
+		const auto add = [&](AVCaptureDevice *device) {
+			if (auto info = CaptureDeviceInfo(device)) {
+				if (!ranges::contains(result, info.id, &DeviceInfo::id)) {
+					result.push_back(std::move(info));
+				}
+			}
+		};
+		add([AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo]);
+		NSArray<AVCaptureDevice*> *devices
+			= [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
+		for (AVCaptureDevice *device in devices) {
+			add(device);
 		}
 		return result;
 	}
@@ -418,7 +450,31 @@ bool EnvironmentMac::refreshFullListOnChange(DeviceType type) {
 }
 
 bool EnvironmentMac::desktopCaptureAllowed() const {
-	return MacDesktopCaptureAllowed();
+	if (@available(macOS 11.0, *)) {
+		// Screen Recording is required on macOS 10.15 an later.
+		// Even if user grants access, restart is required.
+		static const auto result = CGPreflightScreenCaptureAccess();
+		return result;
+	} else if (@available(macOS 10.15, *)) {
+		const auto stream = CGDisplayStreamCreate(
+			CGMainDisplayID(),
+			1,
+			1,
+			kCVPixelFormatType_32BGRA,
+			CFDictionaryRef(),
+			^(
+				CGDisplayStreamFrameStatus status,
+				uint64_t display_time,
+				IOSurfaceRef frame_surface,
+				CGDisplayStreamUpdateRef updateRef) {
+			});
+		if (!stream) {
+			return false;
+		}
+		CFRelease(stream);
+		return true;
+	}
+	return true;
 }
 
 std::optional<QString> EnvironmentMac::uniqueDesktopCaptureSource() const {

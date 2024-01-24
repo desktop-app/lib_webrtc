@@ -12,50 +12,27 @@
 #include <modules/audio_device/include/audio_device_factory.h>
 
 #ifdef WEBRTC_WIN
-#include "webrtc/win/webrtc_loopback_adm_win.h"
+#include "webrtc/platform/win/webrtc_loopback_adm_win.h"
 #endif // WEBRTC_WIN
 
 namespace Webrtc {
 
 rtc::scoped_refptr<webrtc::AudioDeviceModule> CreateAudioDeviceModule(
 		webrtc::TaskQueueFactory *factory,
-		Backend backend) {
-//	const auto create = [&](webrtc::AudioDeviceModule::AudioLayer layer) {
-//		return webrtc::AudioDeviceModule::Create(layer, factory);
-//	};
-	const auto check = [&](
-			const rtc::scoped_refptr<webrtc::AudioDeviceModule> &result) {
-		return (result && (result->Init() == 0)) ? result : nullptr;
-	};
-	if (true || backend == Backend::OpenAL) {
-		if (auto result = check(rtc::make_ref_counted<details::AudioDeviceOpenAL>(factory))) {
-			return result;
-		}
+		Fn<void(Fn<void(DeviceType, QString)>)> saveSetDeviceIdCallback) {
+	auto result = rtc::make_ref_counted<details::AudioDeviceOpenAL>(factory);
+	if (!result || result->Init() != 0) {
+		return nullptr;
 	}
-//#ifdef WEBRTC_WIN
-//	if (backend == Backend::ADM2) {
-//		if (auto result = check(webrtc::CreateWindowsCoreAudioAudioDeviceModule(factory))) {
-//			return result;
-//		}
-//	}
-//#endif // WEBRTC_WIN
-//	if (backend == Backend::ADM) {
-//		if (auto result = check(create(webrtc::AudioDeviceModule::kPlatformDefaultAudio))) {
-//			return result;
-//		}
-//#ifdef WEBRTC_LINUX
-//		if (auto result = check(create(webrtc::AudioDeviceModule::kLinuxAlsaAudio))) {
-//			return result;
-//		}
-//#endif // WEBRTC_LINUX
-//	}
-	return nullptr;
+	saveSetDeviceIdCallback(result->setDeviceIdCallback());
+	return result;
 }
 
-auto AudioDeviceModuleCreator(Backend backend)
+auto AudioDeviceModuleCreator(
+	Fn<void(Fn<void(DeviceType, QString)>)> saveSetDeviceIdCallback)
 -> std::function<AudioDeviceModulePtr(webrtc::TaskQueueFactory*)> {
 	return [=](webrtc::TaskQueueFactory *factory) {
-		return CreateAudioDeviceModule(factory, backend);
+		return CreateAudioDeviceModule(factory, saveSetDeviceIdCallback);
 	};
 }
 

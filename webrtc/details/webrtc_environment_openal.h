@@ -8,15 +8,14 @@
 
 #include "webrtc/platform/webrtc_platform_environment.h"
 
-#include "webrtc/details/webrtc_environment_openal.h"
-#include "webrtc/details/webrtc_environment_video_capture.h"
+namespace Webrtc::details {
 
-namespace Webrtc::Platform {
-
-class EnvironmentLinux final : public Environment {
+class EnvironmentOpenAL final : public Platform::Environment {
 public:
-	explicit EnvironmentLinux(not_null<EnvironmentDelegate*> delegate);
-	~EnvironmentLinux();
+	using EnvironmentDelegate = Platform::EnvironmentDelegate;
+
+	explicit EnvironmentOpenAL(not_null<EnvironmentDelegate*> delegate);
+	~EnvironmentOpenAL();
 
 	QString defaultId(DeviceType type) override;
 	DeviceInfo device(DeviceType type, const QString &id) override;
@@ -28,10 +27,8 @@ public:
 	std::optional<QString> uniqueDesktopCaptureSource() const override;
 
 private:
-	details::EnvironmentOpenAL _audioFallback;
-	details::EnvironmentVideoCapture _cameraFallback;
-	bool _pipewireInitialized = false;
+	const not_null<EnvironmentDelegate*> _delegate;
 
 };
 
-} // namespace Webrtc::Platform
+} // namespace Webrtc::details

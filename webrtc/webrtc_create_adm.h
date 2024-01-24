@@ -20,18 +20,15 @@ class scoped_refptr;
 
 namespace Webrtc {
 
-enum class Backend {
-	OpenAL,
-	ADM,
-	ADM2, // Windows-only.
-};
+enum class DeviceType : uchar;
 
 using AudioDeviceModulePtr = rtc::scoped_refptr<webrtc::AudioDeviceModule>;
 AudioDeviceModulePtr CreateAudioDeviceModule(
 	webrtc::TaskQueueFactory* factory,
-	Backend backend);
+	Fn<void(Fn<void(DeviceType, QString)>)> saveSetDeviceIdCallback);
 
-auto AudioDeviceModuleCreator(Backend backend)
+auto AudioDeviceModuleCreator(
+	Fn<void(Fn<void(DeviceType, QString)>)> saveSetDeviceIdCallback)
 -> std::function<AudioDeviceModulePtr(webrtc::TaskQueueFactory*)>;
 
 AudioDeviceModulePtr CreateLoopbackAudioDeviceModule(

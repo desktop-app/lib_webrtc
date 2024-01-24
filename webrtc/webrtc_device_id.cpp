@@ -74,11 +74,11 @@ QString DeviceId::current() const {
 }
 
 rpl::producer<QString> DeviceId::value() const {
-	return _data.changes();
+	return _data.value();
 }
 
 rpl::producer<QString> DeviceId::changes() const {
-	return _data.value();
+	return _data.changes();
 }
 
 DeviceChangeReason DeviceId::lastChangeReason() const {

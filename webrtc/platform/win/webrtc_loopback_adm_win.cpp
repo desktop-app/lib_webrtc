@@ -1013,6 +1013,10 @@ void AudioDeviceLoopbackWin::startCaptureOnThread() {
 
 	LoopbackCaptureActive = true;
 
+	if (!_audioClient) {
+		return captureFailed("IAudioClient not created.");
+	}
+
 	_thread = CreateThread(NULL, 0, CaptureThreadMethod, this, 0, nullptr);
 	if (!_thread) {
 		return captureFailed("Failed to create thread.");

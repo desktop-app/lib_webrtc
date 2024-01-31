@@ -14,34 +14,23 @@ namespace {
 
 template <typename Callback>
 void EnumerateDevices(DeviceType type, Callback &&callback) {
-	const auto specifier = (type == DeviceType::Playback)
-		? ALC_ALL_DEVICES_SPECIFIER
-		: ALC_CAPTURE_DEVICE_SPECIFIER;
-	auto devices = alcGetString(nullptr, specifier);
-	Assert(devices != nullptr);
-	while (*devices != 0) {
-		callback(devices);
+	const auto specifiers = {
+		ALC_DEVICE_SPECIFIER,
+		(type == DeviceType::Playback)
+			? ALC_ALL_DEVICES_SPECIFIER
+			: ALC_CAPTURE_DEVICE_SPECIFIER,
+	};
+	for (const auto &specifier : specifiers) {
+		auto devices = alcGetString(nullptr, specifier);
+		Assert(devices != nullptr);
 		while (*devices != 0) {
+			callback(devices);
+			while (*devices != 0) {
+				++devices;
+			}
 			++devices;
 		}
-		++devices;
 	}
-}
-
-[[nodiscard]] QString ComputeDefaultPlaybackDeviceId() {
-	const auto result = alcIsExtensionPresent({}, "ALC_ENUMERATE_ALL_EXT")
-		? alcGetString(
-			nullptr,
-			alcGetEnumValue(nullptr, "ALC_DEFAULT_ALL_DEVICES_SPECIFIER"))
-		: alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER);
-	return result ? QString::fromUtf8(result) : QString();
-}
-
-[[nodiscard]] QString ComputeDefaultCaptureDeviceId() {
-	const auto result = alcGetString(
-		nullptr,
-		ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER);
-	return result ? QString::fromUtf8(result) : QString();
 }
 
 [[nodiscard]] DeviceInfo DeviceFromOpenAL(
@@ -71,9 +60,8 @@ EnvironmentOpenAL::~EnvironmentOpenAL() {
 QString EnvironmentOpenAL::defaultId(DeviceType type) {
 	Expects(type == DeviceType::Playback || type == DeviceType::Capture);
 
-	return (type == DeviceType::Playback)
-		? ComputeDefaultPlaybackDeviceId()
-		: ComputeDefaultCaptureDeviceId();
+	return QString::fromUtf8(
+		alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER));
 }
 
 DeviceInfo EnvironmentOpenAL::device(DeviceType type, const QString &id) {

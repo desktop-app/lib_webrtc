@@ -30,30 +30,6 @@ void EnumerateDevices(DeviceType type, Callback &&callback) {
 	}
 }
 
-[[nodiscard]] QString ComputeDefaultPlaybackDeviceId() {
-	[[maybe_unused]] const auto reenumerate = alcGetString(
-		nullptr,
-		ALC_ALL_DEVICES_SPECIFIER);
-
-	const auto result = alcIsExtensionPresent({}, "ALC_ENUMERATE_ALL_EXT")
-		? alcGetString(
-			nullptr,
-			alcGetEnumValue(nullptr, "ALC_DEFAULT_ALL_DEVICES_SPECIFIER"))
-		: alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER);
-	return result ? QString::fromUtf8(result) : QString();
-}
-
-[[nodiscard]] QString ComputeDefaultCaptureDeviceId() {
-	[[maybe_unused]] auto reenumerate = alcGetString(
-		nullptr,
-		ALC_CAPTURE_DEVICE_SPECIFIER);
-
-	const auto result = alcGetString(
-		nullptr,
-		ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER);
-	return result ? QString::fromUtf8(result) : QString();
-}
-
 [[nodiscard]] DeviceInfo DeviceFromOpenAL(
 	DeviceType type,
 	const char *device) {
@@ -85,9 +61,16 @@ QString EnvironmentOpenAL::defaultId(DeviceType type) {
 QString EnvironmentOpenAL::DefaultId(DeviceType type) {
 	Expects(type == DeviceType::Playback || type == DeviceType::Capture);
 
-	return (type == DeviceType::Playback)
-		? ComputeDefaultPlaybackDeviceId()
-		: ComputeDefaultCaptureDeviceId();
+	[[maybe_unused]] const auto reenumerate = alcGetString(
+		nullptr,
+		(type == DeviceType::Capture)
+			? ALC_CAPTURE_DEVICE_SPECIFIER
+			: ALC_ALL_DEVICES_SPECIFIER);
+
+	return QString::fromUtf8(
+		alcGetString(nullptr, (type == DeviceType::Capture)
+			? ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER
+			: ALC_DEFAULT_ALL_DEVICES_SPECIFIER));
 }
 
 DeviceResolvedId EnvironmentOpenAL::DefaultResolvedId(DeviceType type) {

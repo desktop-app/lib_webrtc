@@ -67,10 +67,12 @@ Environment::Devices Environment::resolveDevices(DeviceType type) const {
 }
 
 QString Environment::defaultId(DeviceType type) const {
+	validateDefaultId(type);
 	return _devices[TypeToIndex(type)].defaultId;
 }
 
 std::vector<DeviceInfo> Environment::devices(DeviceType type) const {
+	validateDevices(type);
 	return _devices[TypeToIndex(type)].list;
 }
 
@@ -95,6 +97,8 @@ rpl::producer<DeviceChange> Environment::defaultChanges(
 
 rpl::producer<std::vector<DeviceInfo>> Environment::devicesValue(
 		DeviceType type) const {
+	validateDevices(type);
+
 	const auto devices = &_devices[TypeToIndex(type)];
 	return devices->changes.events_starting_with(
 		DevicesChangeEvent{ .listChanged = true }
@@ -136,6 +140,12 @@ bool Environment::desktopCaptureAllowed() const {
 
 std::optional<QString> Environment::uniqueDesktopCaptureSource() const {
 	return _platform->uniqueDesktopCaptureSource();
+}
+
+DeviceResolvedId Environment::threadSafeResolveId(
+		const DeviceResolvedId &lastResolvedId,
+		const QString &savedId) const {
+	return _platform->threadSafeResolveId(lastResolvedId, savedId);
 }
 
 void Environment::defaultChanged(
@@ -198,6 +208,14 @@ void Environment::deviceStateChanged(
 
 void Environment::devicesForceRefresh(DeviceType type) {
 	forceRefresh(type);
+}
+
+void Environment::validateDefaultId(DeviceType type) const {
+	_platform->defaultIdRequested(type);
+}
+
+void Environment::validateDevices(DeviceType type) const {
+	_platform->devicesRequested(type);
 }
 
 bool Environment::synced(DeviceType type) const {

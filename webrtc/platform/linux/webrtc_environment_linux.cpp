@@ -89,6 +89,30 @@ std::optional<QString> EnvironmentLinux::uniqueDesktopCaptureSource() const {
 	return std::nullopt;
 }
 
+void EnvironmentLinux::defaultIdRequested(DeviceType type) {
+	if (type == DeviceType::Camera) {
+		_cameraFallback.defaultIdRequested(type);
+	} else {
+		_audioFallback.defaultIdRequested(type);
+	}
+}
+
+void EnvironmentLinux::devicesRequested(DeviceType type) {
+	if (type == DeviceType::Camera) {
+		_cameraFallback.devicesRequested(type);
+	} else {
+		_audioFallback.devicesRequested(type);
+	}
+}
+
+DeviceResolvedId EnvironmentLinux::threadSafeResolveId(
+		const DeviceResolvedId &lastResolvedId,
+		const QString &savedId) {
+	return (lastResolvedId.type == DeviceType::Camera)
+		? _cameraFallback.threadSafeResolveId(lastResolvedId, savedId)
+		: _audioFallback.threadSafeResolveId(lastResolvedId, savedId);
+}
+
 std::unique_ptr<Environment> CreateEnvironment(
 		not_null<EnvironmentDelegate*> delegate) {
 	return std::make_unique<EnvironmentLinux>(delegate);

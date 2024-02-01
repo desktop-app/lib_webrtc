@@ -6,6 +6,8 @@
 //
 #include "webrtc/details/webrtc_environment_openal.h"
 
+#include "webrtc/webrtc_environment.h"
+
 #include <al.h>
 #include <alc.h>
 
@@ -29,6 +31,10 @@ void EnumerateDevices(DeviceType type, Callback &&callback) {
 }
 
 [[nodiscard]] QString ComputeDefaultPlaybackDeviceId() {
+	[[maybe_unused]] const auto reenumerate = alcGetString(
+		nullptr,
+		ALC_ALL_DEVICES_SPECIFIER);
+
 	const auto result = alcIsExtensionPresent({}, "ALC_ENUMERATE_ALL_EXT")
 		? alcGetString(
 			nullptr,
@@ -38,6 +44,10 @@ void EnumerateDevices(DeviceType type, Callback &&callback) {
 }
 
 [[nodiscard]] QString ComputeDefaultCaptureDeviceId() {
+	[[maybe_unused]] auto reenumerate = alcGetString(
+		nullptr,
+		ALC_CAPTURE_DEVICE_SPECIFIER);
+
 	const auto result = alcGetString(
 		nullptr,
 		ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER);
@@ -69,11 +79,37 @@ EnvironmentOpenAL::~EnvironmentOpenAL() {
 }
 
 QString EnvironmentOpenAL::defaultId(DeviceType type) {
+	return DefaultId(type);
+}
+
+QString EnvironmentOpenAL::DefaultId(DeviceType type) {
 	Expects(type == DeviceType::Playback || type == DeviceType::Capture);
 
 	return (type == DeviceType::Playback)
 		? ComputeDefaultPlaybackDeviceId()
 		: ComputeDefaultCaptureDeviceId();
+}
+
+DeviceResolvedId EnvironmentOpenAL::DefaultResolvedId(DeviceType type) {
+	return { DefaultId(type), type, true };
+}
+
+DeviceResolvedId EnvironmentOpenAL::ResolveId(
+		DeviceType type,
+		const QString &savedId) {
+	if (savedId.isEmpty() || savedId == kDefaultDeviceId) {
+		return DefaultResolvedId(type);
+	}
+	auto found = false;
+	EnumerateDevices(type, [&](const char *device) {
+		const auto info = DeviceFromOpenAL(type, device);
+		if (info.id == savedId) {
+			found = true;
+		}
+	});
+	return found
+		? DeviceResolvedId{ savedId, type }
+		: DefaultResolvedId(type);
 }
 
 DeviceInfo EnvironmentOpenAL::device(DeviceType type, const QString &id) {
@@ -114,6 +150,26 @@ bool EnvironmentOpenAL::desktopCaptureAllowed() const {
 auto EnvironmentOpenAL::uniqueDesktopCaptureSource() const
 -> std::optional<QString> {
 	Unexpected("EnvironmentOpenAL::uniqueDesktopCaptureSource.");
+}
+
+void EnvironmentOpenAL::defaultIdRequested(DeviceType type) {
+	_delegate->devicesForceRefresh(type);
+}
+
+void EnvironmentOpenAL::devicesRequested(DeviceType type) {
+	_delegate->devicesForceRefresh(type);
+}
+
+DeviceResolvedId EnvironmentOpenAL::threadSafeResolveId(
+		const DeviceResolvedId &lastResolvedId,
+		const QString &savedId) {
+	const auto result = ResolveId(lastResolvedId.type, savedId);
+	if (result != lastResolvedId) {
+		crl::on_main(this, [=, type = lastResolvedId.type] {
+			_delegate->devicesForceRefresh(type);
+		});
+	}
+	return result;
 }
 
 } // namespace Webrtc::details

@@ -228,7 +228,7 @@ std::invoke_result_t<Callback> AudioDeviceOpenAL::sync(Callback &&callback) {
 AudioDeviceOpenAL::AudioDeviceOpenAL(
 	webrtc::TaskQueueFactory *taskQueueFactory)
 : _audioDeviceBuffer(taskQueueFactory)
-, _devicesIds(std::make_shared<DevicesIds>()) {
+, _deviceResolvedIds(std::make_shared<DeviceResolvedIds>()) {
 	_audioDeviceBuffer.SetRecordingSampleRate(kRecordingFrequency);
 	_audioDeviceBuffer.SetRecordingChannels(kRecordingChannels);
 }
@@ -237,15 +237,14 @@ AudioDeviceOpenAL::~AudioDeviceOpenAL() {
 	Terminate();
 }
 
-Fn<void(DeviceType, QString)> AudioDeviceOpenAL::setDeviceIdCallback() {
-	return [weak = std::weak_ptr<DevicesIds>(_devicesIds)](
-			DeviceType type,
-			QString id) {
+Fn<void(DeviceResolvedId)> AudioDeviceOpenAL::setDeviceIdCallback() {
+	return [weak = std::weak_ptr<DeviceResolvedIds>(_deviceResolvedIds)](
+			DeviceResolvedId id) {
 		if (const auto shared = weak.lock()) {
 			auto lock = QMutexLocker(&shared->mutex);
-			(type == DeviceType::Playback
-				? shared->playbackDeviceId
-				: shared->captureDeviceId) = std::move(id);
+			(id.type == DeviceType::Playback
+				? shared->playback
+				: shared->capture) = std::move(id);
 		}
 	};
 }
@@ -524,21 +523,20 @@ void AudioDeviceOpenAL::openRecordingDevice() {
 	if (_recordingDevice || _recordingFailed) {
 		return;
 	}
-	auto lock = QMutexLocker(&_devicesIds->mutex);
-	const auto id = _devicesIds->captureDeviceId;
+	auto lock = QMutexLocker(&_deviceResolvedIds->mutex);
+	const auto id = _deviceResolvedIds->capture;
 	lock.unlock();
 
-	const auto specific = !id.isEmpty() && (id != kDefaultDeviceId);
-	const auto utf8 = specific ? id.toStdString() : std::string();
+	const auto utf = id.isDefault() ? std::string() : id.value.toStdString();
 	_recordingDevice = alcCaptureOpenDevice(
-		utf8.empty() ? nullptr : utf8.c_str(),
+		utf.empty() ? nullptr : utf.c_str(),
 		kRecordingFrequency,
 		AL_FORMAT_MONO16,
 		kRecordingFrequency / 4);
 	if (!_recordingDevice) {
 		RTC_LOG(LS_ERROR)
 			<< "OpenAL Capture Device open failed, deviceID: '"
-			<< utf8
+			<< utf
 			<< "'";
 		_recordingFailed = true;
 		return;
@@ -565,17 +563,16 @@ void AudioDeviceOpenAL::openPlayoutDevice() {
 	if (_playoutDevice || _playoutFailed) {
 		return;
 	}
-	auto lock = QMutexLocker(&_devicesIds->mutex);
-	const auto id = _devicesIds->playbackDeviceId;
+	auto lock = QMutexLocker(&_deviceResolvedIds->mutex);
+	const auto id = _deviceResolvedIds->playback;
 	lock.unlock();
 
-	const auto specific = !id.isEmpty() && (id != kDefaultDeviceId);
-	const auto utf8 = specific ? id.toStdString() : std::string();
-	_playoutDevice = alcOpenDevice(utf8.empty() ? nullptr : utf8.c_str());
+	const auto utf = id.isDefault() ? std::string() : id.value.toStdString();
+	_playoutDevice = alcOpenDevice(utf.empty() ? nullptr : utf.c_str());
 	if (!_playoutDevice) {
 		RTC_LOG(LS_ERROR)
 			<< "OpenAL Device open failed, deviceID: '"
-			<< utf8
+			<< utf
 			<< "'";
 		_playoutFailed = true;
 		return;

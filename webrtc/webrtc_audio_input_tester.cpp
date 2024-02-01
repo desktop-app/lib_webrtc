@@ -21,7 +21,7 @@ public:
 	explicit Impl(const std::shared_ptr<std::atomic<int>> &maxSample);
 	~Impl();
 
-	void setDeviceId(const QString &deviceId);
+	void setDeviceId(const DeviceResolvedId &deviceId);
 
 private:
 	void init();
@@ -64,20 +64,21 @@ private:
 	std::shared_ptr<std::atomic<int>> _maxSample;
 	std::unique_ptr<webrtc::TaskQueueFactory> _taskQueueFactory;
 	rtc::scoped_refptr<webrtc::AudioDeviceModule> _adm;
-	Fn<void(Webrtc::DeviceType, QString)> _setDeviceIdCallback;
-	QString _deviceId;
+	Fn<void(DeviceResolvedId)> _setDeviceIdCallback;
+	DeviceResolvedId _deviceId;
 
 };
 
 AudioInputTester::Impl::Impl(
 	const std::shared_ptr<std::atomic<int>> &maxSample)
 : _maxSample(std::move(maxSample))
-, _taskQueueFactory(webrtc::CreateDefaultTaskQueueFactory()) {
+, _taskQueueFactory(webrtc::CreateDefaultTaskQueueFactory())
+, _deviceId{ .type = DeviceType::Capture } {
 	const auto saveSetDeviceIdCallback = [=](
-			Fn<void(Webrtc::DeviceType, QString)> setDeviceIdCallback) {
+			Fn<void(DeviceResolvedId)> setDeviceIdCallback) {
 		_setDeviceIdCallback = std::move(setDeviceIdCallback);
-		if (!_deviceId.isEmpty()) {
-			_setDeviceIdCallback(Webrtc::DeviceType::Capture, _deviceId);
+		if (!_deviceId.isDefault()) {
+			_setDeviceIdCallback(_deviceId);
 			restart();
 		}
 	};
@@ -103,10 +104,10 @@ void AudioInputTester::Impl::init() {
 	_adm->RegisterAudioCallback(this);
 }
 
-void AudioInputTester::Impl::setDeviceId(const QString &deviceId) {
+void AudioInputTester::Impl::setDeviceId(const DeviceResolvedId &deviceId) {
 	_deviceId = deviceId;
 	if (_setDeviceIdCallback) {
-		_setDeviceIdCallback(Webrtc::DeviceType::Capture, _deviceId);
+		_setDeviceIdCallback(_deviceId);
 		restart();
 	}
 }
@@ -172,10 +173,12 @@ void AudioInputTester::Impl::PullRenderData(int bits_per_sample,
 		int64_t* ntp_time_ms) {
 }
 
-AudioInputTester::AudioInputTester(rpl::producer<QString> deviceId)
+AudioInputTester::AudioInputTester(rpl::producer<DeviceResolvedId> deviceId)
 : _maxSample(std::make_shared<std::atomic<int>>(0))
 , _impl(std::as_const(_maxSample)) {
-	std::move(deviceId) | rpl::start_with_next([=](const QString &id) {
+	std::move(
+		deviceId
+	) | rpl::start_with_next([=](const DeviceResolvedId &id) {
 		_impl.with([=](Impl &impl) {
 			impl.setDeviceId(id);
 		});

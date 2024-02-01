@@ -32,6 +32,15 @@ public:
 	[[nodiscard]] virtual auto uniqueDesktopCaptureSource() const
 		-> std::optional<QString> = 0;
 
+	virtual void defaultIdRequested(DeviceType type) = 0;
+	virtual void devicesRequested(DeviceType type) = 0;
+
+	[[nodiscard]] virtual DeviceResolvedId threadSafeResolveId(
+			const DeviceResolvedId &lastResolvedId,
+			const QString &savedId) {
+		return lastResolvedId;
+	}
+
 };
 
 [[nodiscard]] std::unique_ptr<Environment> CreateEnvironment(

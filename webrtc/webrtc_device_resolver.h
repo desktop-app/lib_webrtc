@@ -6,22 +6,27 @@
 //
 #pragma once
 
+#include "base/qt/qt_compare.h"
 #include "webrtc/webrtc_device_common.h"
+
+#include <QtCore/QMutex>
 
 namespace Webrtc {
 
 class Environment;
 
-class DeviceId final {
+class DeviceResolver final {
 public:
-	DeviceId(
+	DeviceResolver(
 		not_null<Environment*> environment,
 		DeviceType type,
 		rpl::producer<QString> savedValue);
 
-	[[nodiscard]] QString current() const;
-	[[nodiscard]] rpl::producer<QString> value() const;
-	[[nodiscard]] rpl::producer<QString> changes() const;
+	[[nodiscard]] DeviceResolvedId current() const;
+	[[nodiscard]] rpl::producer<DeviceResolvedId> value() const;
+	[[nodiscard]] rpl::producer<DeviceResolvedId> changes() const;
+
+	[[nodiscard]] DeviceResolvedId threadSafeCurrent() const;
 
 	[[nodiscard]] DeviceChangeReason lastChangeReason() const;
 
@@ -29,9 +34,10 @@ private:
 	void trackSavedId();
 
 	const not_null<Environment*> _environment;
-	const DeviceType _type;
 	QString _savedId;
-	rpl::variable<QString> _data;
+	DeviceResolvedId _current;
+	mutable QMutex _mutex;
+	rpl::variable<DeviceResolvedId> _data;
 	DeviceChangeReason _lastChangeReason = DeviceChangeReason::Manual;
 	rpl::lifetime _lifetime;
 

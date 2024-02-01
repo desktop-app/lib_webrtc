@@ -27,6 +27,13 @@ public:
 	bool desktopCaptureAllowed() const override;
 	std::optional<QString> uniqueDesktopCaptureSource() const override;
 
+	void defaultIdRequested(DeviceType type) override;
+	void devicesRequested(DeviceType type) override;
+
+	DeviceResolvedId threadSafeResolveId(
+		const DeviceResolvedId &lastResolvedId,
+		const QString &savedId) override;
+
 private:
 	details::EnvironmentOpenAL _audioFallback;
 	details::EnvironmentVideoCapture _cameraFallback;

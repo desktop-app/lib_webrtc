@@ -481,6 +481,12 @@ std::optional<QString> EnvironmentMac::uniqueDesktopCaptureSource() const {
 	return {};
 }
 
+void EnvironmentMac::defaultIdRequested(DeviceType type) {
+}
+
+void EnvironmentMac::devicesRequested(DeviceType type) {
+}
+
 std::unique_ptr<Environment> CreateEnvironment(
 		not_null<EnvironmentDelegate*> delegate) {
 	return std::make_unique<EnvironmentMac>(delegate);

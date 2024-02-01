@@ -19,7 +19,7 @@ namespace Webrtc {
 
 rtc::scoped_refptr<webrtc::AudioDeviceModule> CreateAudioDeviceModule(
 		webrtc::TaskQueueFactory *factory,
-		Fn<void(Fn<void(DeviceType, QString)>)> saveSetDeviceIdCallback) {
+		Fn<void(Fn<void(DeviceResolvedId)>)> saveSetDeviceIdCallback) {
 	auto result = rtc::make_ref_counted<details::AudioDeviceOpenAL>(factory);
 	if (!result || result->Init() != 0) {
 		return nullptr;
@@ -29,7 +29,7 @@ rtc::scoped_refptr<webrtc::AudioDeviceModule> CreateAudioDeviceModule(
 }
 
 auto AudioDeviceModuleCreator(
-	Fn<void(Fn<void(DeviceType, QString)>)> saveSetDeviceIdCallback)
+	Fn<void(Fn<void(DeviceResolvedId)>)> saveSetDeviceIdCallback)
 -> std::function<AudioDeviceModulePtr(webrtc::TaskQueueFactory*)> {
 	return [=](webrtc::TaskQueueFactory *factory) {
 		return CreateAudioDeviceModule(factory, saveSetDeviceIdCallback);

@@ -6,6 +6,8 @@
 //
 #pragma once
 
+#include "webrtc/webrtc_device_common.h"
+
 #include <modules/audio_device/include/audio_device.h>
 #include <modules/audio_device/audio_device_buffer.h>
 
@@ -20,16 +22,12 @@ namespace rtc {
 class Thread;
 } // namespace rtc
 
-namespace Webrtc {
-enum class DeviceType : uchar;
-} // namespace Webrtc
-
 namespace Webrtc::details {
 
-struct DevicesIds {
+struct DeviceResolvedIds {
 	QMutex mutex;
-	QString playbackDeviceId;
-	QString captureDeviceId;
+	DeviceResolvedId playback{ .type = DeviceType::Playback };
+	DeviceResolvedId capture{ .type = DeviceType::Capture };
 };
 
 class AudioDeviceOpenAL : public webrtc::AudioDeviceModule {
@@ -37,13 +35,13 @@ public:
 	explicit AudioDeviceOpenAL(webrtc::TaskQueueFactory *taskQueueFactory);
 	~AudioDeviceOpenAL();
 
-	[[nodiscard]] Fn<void(DeviceType, QString)> setDeviceIdCallback();
+	[[nodiscard]] Fn<void(DeviceResolvedId)> setDeviceIdCallback();
 
 	int32_t ActiveAudioLayer(AudioLayer *audioLayer) const override;
 	int32_t RegisterAudioCallback(
 		webrtc::AudioTransport *audioCallback) override;
 
-	// Main initializaton and termination
+	// Main initialization and termination
 	int32_t Init() override;
 	int32_t Terminate() override;
 	bool Initialized() const override;
@@ -188,7 +186,7 @@ private:
 	webrtc::AudioDeviceBuffer _audioDeviceBuffer;
 	std::unique_ptr<Data> _data;
 
-	std::shared_ptr<DevicesIds> _devicesIds;
+	std::shared_ptr<DeviceResolvedIds> _deviceResolvedIds;
 
 	ALCdevice *_playoutDevice = nullptr;
 	ALCcontext *_playoutContext = nullptr;

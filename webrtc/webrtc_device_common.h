@@ -62,4 +62,23 @@ struct DevicesChange {
 
 inline QString kDefaultDeviceId = u"default"_q;
 
+struct DeviceResolvedId {
+	QString value;
+	DeviceType type = DeviceType::Playback;
+	bool computedFromDefault = false;
+
+	[[nodiscard]] bool isDefault() const {
+		return computedFromDefault
+			|| value.isEmpty()
+			|| value == kDefaultDeviceId;
+	}
+
+	friend inline auto operator<=>(
+		const DeviceResolvedId &a,
+		const DeviceResolvedId &b) = default;
+	friend inline bool operator==(
+		const DeviceResolvedId &a,
+		const DeviceResolvedId &b) = default;
+};
+
 } // namespace Webrtc

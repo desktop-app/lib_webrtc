@@ -11,6 +11,12 @@
 #include "webrtc/details/webrtc_environment_video_capture.h"
 #include "base/platform/win/base_windows_winrt.h"
 
+//#define WEBRTC_TESTING_OPENAL
+
+#ifdef WEBRTC_TESTING_OPENAL
+#include "webrtc/details/webrtc_environment_openal.h"
+#endif // WEBRTC_TESTING_OPENAL
+
 struct IMMDeviceEnumerator;
 struct IMMNotificationClient;
 
@@ -30,6 +36,13 @@ public:
 	bool desktopCaptureAllowed() const override;
 	std::optional<QString> uniqueDesktopCaptureSource() const override;
 
+	void defaultIdRequested(DeviceType type) override;
+	void devicesRequested(DeviceType type) override;
+
+	DeviceResolvedId threadSafeResolveId(
+		const DeviceResolvedId &lastResolvedId,
+		const QString &savedId) override;
+
 private:
 	void processDeviceStateChange(
 		const QString &id,
@@ -38,6 +51,9 @@ private:
 	class Client;
 
 	const not_null<EnvironmentDelegate*> _delegate;
+#ifdef WEBRTC_TESTING_OPENAL
+	details::EnvironmentOpenAL _audioFallback;
+#endif // WEBRTC_TESTING_OPENAL
 	details::EnvironmentVideoCapture _cameraFallback;
 
 	bool _comInitialized = false;

@@ -6,11 +6,14 @@
 //
 #pragma once
 
+#include "base/weak_ptr.h"
 #include "webrtc/platform/webrtc_platform_environment.h"
 
 namespace Webrtc::details {
 
-class EnvironmentOpenAL final : public Platform::Environment {
+class EnvironmentOpenAL final
+	: public Platform::Environment
+	, public base::has_weak_ptr {
 public:
 	using EnvironmentDelegate = Platform::EnvironmentDelegate;
 
@@ -26,7 +29,20 @@ public:
 	bool desktopCaptureAllowed() const override;
 	std::optional<QString> uniqueDesktopCaptureSource() const override;
 
+	void defaultIdRequested(DeviceType type) override;
+	void devicesRequested(DeviceType type) override;
+
+	DeviceResolvedId threadSafeResolveId(
+		const DeviceResolvedId &lastResolvedId,
+		const QString &savedId) override;
+
 private:
+	[[nodiscard]] static QString DefaultId(DeviceType type);
+	[[nodiscard]] static DeviceResolvedId DefaultResolvedId(DeviceType type);
+	[[nodiscard]] static DeviceResolvedId ResolveId(
+		DeviceType type,
+		const QString &savedId);
+
 	const not_null<EnvironmentDelegate*> _delegate;
 
 };

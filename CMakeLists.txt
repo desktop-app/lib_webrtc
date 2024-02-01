@@ -18,8 +18,8 @@ PRIVATE
     webrtc/webrtc_create_adm.cpp
     webrtc/webrtc_create_adm.h
     webrtc/webrtc_device_common.h
-    webrtc/webrtc_device_id.cpp
-    webrtc/webrtc_device_id.h
+    webrtc/webrtc_device_resolver.cpp
+    webrtc/webrtc_device_resolver.h
     webrtc/webrtc_environment.cpp
     webrtc/webrtc_environment.h
     webrtc/webrtc_video_track.cpp

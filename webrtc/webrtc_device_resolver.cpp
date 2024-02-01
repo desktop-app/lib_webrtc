@@ -4,7 +4,7 @@
 // For license and copyright information please follow this link:
 // https://github.com/desktop-app/legal/blob/master/LEGAL
 //
-#include "webrtc/webrtc_device_id.h"
+#include "webrtc/webrtc_device_resolver.h"
 
 #include "webrtc/webrtc_environment.h"
 
@@ -17,38 +17,47 @@ namespace {
 
 } // namespace
 
-DeviceId::DeviceId(
+DeviceResolver::DeviceResolver(
 	not_null<Environment*> environment,
 	DeviceType type,
 	rpl::producer<QString> savedId)
 : _environment(environment)
-, _type(type) {
+, _current{ .type = type }
+, _data(_current) {
+	_data.changes() | rpl::start_with_next([=](DeviceResolvedId id) {
+		QMutexLocker lock(&_mutex);
+		_current = id;
+	}, _lifetime);
+
 	std::move(
 		savedId
 	) | rpl::start_with_next([=](QString id) {
+		QMutexLocker lock(&_mutex);
 		_savedId = id;
+		lock.unlock();
+
 		trackSavedId();
 	}, _lifetime);
 }
 
-void DeviceId::trackSavedId() {
-	const auto now = _environment->defaultId(_type);
+void DeviceResolver::trackSavedId() {
+	const auto now = _environment->defaultId(_current.type);
 	if (IsDefault(_savedId)) {
 		_data = rpl::single(
 			DeviceChange{ now, now }
 		) | rpl::then(
-			_environment->defaultChanges(_type)
+			_environment->defaultChanges(_current.type)
 		) | rpl::map([=](const DeviceChange &change) {
 			_lastChangeReason = change.reason;
-			return change.nowId;
+			return DeviceResolvedId{ change.nowId, _current.type, true };
 		});
 		return;
 	}
 	_data = rpl::single(DevicesChange{
 		DeviceChange{ now, now },
-		_environment->devices(_type),
+		_environment->devices(_current.type),
 	}) | rpl::then(
-		_environment->changes(_type)
+		_environment->changes(_current.type)
 	) | rpl::map([=](const DevicesChange &change) {
 		const auto now = _data.current();
 		const auto i = ranges::find(
@@ -56,32 +65,49 @@ void DeviceId::trackSavedId() {
 			_savedId,
 			&DeviceInfo::id);
 		if (i != end(change.nowList) && !i->inactive) {
-			if (now != _savedId) {
+			auto result = DeviceResolvedId{ _savedId, now.type };
+			if (now != result) {
 				_lastChangeReason = DeviceChangeReason::Connected;
 			}
-			return _savedId;
+			return result;
 		} else {
-			_lastChangeReason = (now == _savedId)
+			_lastChangeReason = (now == DeviceResolvedId{ _savedId })
 				? DeviceChangeReason::Disconnected
 				: change.defaultChange.reason;
-			return change.defaultChange.nowId;
+			const auto &defaultId = change.defaultChange.nowId;
+			return DeviceResolvedId{ defaultId, now.type, true };
 		}
 	});
 }
 
-QString DeviceId::current() const {
+DeviceResolvedId DeviceResolver::current() const {
+	if (IsDefault(_savedId)) {
+		_environment->validateDefaultId(_current.type);
+	} else {
+		_environment->validateDevices(_current.type);
+	}
+
 	return _data.current();
 }
 
-rpl::producer<QString> DeviceId::value() const {
+DeviceResolvedId DeviceResolver::threadSafeCurrent() const {
+	QMutexLocker lock(&_mutex);
+	auto savedId = _savedId;
+	auto current = _current;
+	lock.unlock();
+
+	return _environment->threadSafeResolveId(current, savedId);
+}
+
+rpl::producer<DeviceResolvedId> DeviceResolver::value() const {
 	return _data.value();
 }
 
-rpl::producer<QString> DeviceId::changes() const {
+rpl::producer<DeviceResolvedId> DeviceResolver::changes() const {
 	return _data.changes();
 }
 
-DeviceChangeReason DeviceId::lastChangeReason() const {
+DeviceChangeReason DeviceResolver::lastChangeReason() const {
 	return _lastChangeReason;
 }
 

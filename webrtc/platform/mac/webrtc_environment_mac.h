@@ -24,6 +24,9 @@ public:
 	bool desktopCaptureAllowed() const override;
 	std::optional<QString> uniqueDesktopCaptureSource() const override;
 
+	void defaultIdRequested(DeviceType type) override;
+	void devicesRequested(DeviceType type) override;
+
 	void defaultPlaybackDeviceChanged();
 	void defaultCaptureDeviceChanged();
 	void audioDeviceListChanged();

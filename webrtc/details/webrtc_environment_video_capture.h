@@ -27,6 +27,9 @@ public:
 	bool desktopCaptureAllowed() const override;
 	std::optional<QString> uniqueDesktopCaptureSource() const override;
 
+	void defaultIdRequested(DeviceType type) override;
+	void devicesRequested(DeviceType type) override;
+
 private:
 	const not_null<EnvironmentDelegate*> _delegate;
 

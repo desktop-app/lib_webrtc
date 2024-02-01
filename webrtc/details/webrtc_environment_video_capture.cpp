@@ -6,6 +6,8 @@
 //
 #include "webrtc/details/webrtc_environment_video_capture.h"
 
+#include "webrtc/webrtc_environment.h"
+
 #include <api/task_queue/default_task_queue_factory.h>
 #include <modules/video_capture/video_capture_factory.h>
 #include <modules/audio_device/include/audio_device_factory.h>
@@ -90,6 +92,14 @@ bool EnvironmentVideoCapture::desktopCaptureAllowed() const {
 auto EnvironmentVideoCapture::uniqueDesktopCaptureSource() const
 -> std::optional<QString> {
 	Unexpected("EnvironmentVideoCapture::uniqueDesktopCaptureSource.");
+}
+
+void EnvironmentVideoCapture::defaultIdRequested(DeviceType type) {
+	_delegate->devicesForceRefresh(type);
+}
+
+void EnvironmentVideoCapture::devicesRequested(DeviceType type) {
+	_delegate->devicesForceRefresh(type);
 }
 
 } // namespace Webrtc::details

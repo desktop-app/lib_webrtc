@@ -32,6 +32,8 @@ public:
 
 namespace Webrtc {
 
+struct DeviceId;
+
 class Environment final : private Platform::EnvironmentDelegate {
 public:
 	Environment();
@@ -47,8 +49,15 @@ public:
 	[[nodiscard]] rpl::producer<std::vector<DeviceInfo>> devicesValue(
 		DeviceType type) const;
 
+	void validateDefaultId(DeviceType type) const;
+	void validateDevices(DeviceType type) const;
+
 	[[nodiscard]] bool desktopCaptureAllowed() const;
 	[[nodiscard]] std::optional<QString> uniqueDesktopCaptureSource() const;
+
+	[[nodiscard]] DeviceResolvedId threadSafeResolveId(
+		const DeviceResolvedId &lastResolvedId,
+		const QString &savedId) const;
 
 private:
 	static constexpr auto kTypeCount = 3;

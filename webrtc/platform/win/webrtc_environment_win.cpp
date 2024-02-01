@@ -122,7 +122,11 @@ HRESULT STDMETHODCALLTYPE EnvironmentWin::Client::OnDefaultDeviceChanged(
 
 EnvironmentWin::EnvironmentWin(not_null<EnvironmentDelegate*> delegate)
 : _delegate(delegate)
+#ifdef WEBRTC_TESTING_OPENAL
+, _audioFallback(delegate)
+#endif // WEBRTC_TESTING_OPENAL
 , _cameraFallback(delegate) {
+#ifndef WEBRTC_TESTING_OPENAL
 	using namespace base::WinRT;
 	_enumerator = TryCreateInstance<IMMDeviceEnumerator>(
 		CLSID_MMDeviceEnumerator);
@@ -152,6 +156,7 @@ EnvironmentWin::EnvironmentWin(not_null<EnvironmentDelegate*> delegate)
 	if (FAILED(hr)) {
 		LOG(("Media Error: RegisterEndpointNotificationCallback failed."));
 	}
+#endif // !WEBRTC_TESTING_OPENAL
 }
 
 EnvironmentWin::~EnvironmentWin() {
@@ -170,6 +175,9 @@ QString EnvironmentWin::defaultId(DeviceType type) {
 	if (type == DeviceType::Camera) {
 		return _cameraFallback.defaultId(type);
 	} else if (!_enumerator) {
+#ifdef WEBRTC_TESTING_OPENAL
+		return _audioFallback.defaultId(type);
+#endif // WEBRTC_TESTING_OPENAL
 		return {};
 	}
 	const auto flow = (type == DeviceType::Playback)
@@ -224,6 +232,9 @@ DeviceInfo EnvironmentWin::device(DeviceType type, const QString &id) {
 	if (type == DeviceType::Camera) {
 		return _cameraFallback.device(type, id);
 	} else if (!_enumerator) {
+#ifdef WEBRTC_TESTING_OPENAL
+		return _audioFallback.device(type, id);
+#endif // WEBRTC_TESTING_OPENAL
 		return {};
 	}
 	const auto wide = id.toStdWString();
@@ -267,6 +278,9 @@ std::vector<DeviceInfo> EnvironmentWin::devices(DeviceType type) {
 	if (type == DeviceType::Camera) {
 		return _cameraFallback.devices(type);
 	} else if (!_enumerator) {
+#ifdef WEBRTC_TESTING_OPENAL
+		return _audioFallback.devices(type);
+#endif // WEBRTC_TESTING_OPENAL
 		return {};
 	}
 	const auto flow = (type == DeviceType::Playback)
@@ -341,6 +355,9 @@ bool EnvironmentWin::refreshFullListOnChange(DeviceType type) {
 	if (type == DeviceType::Camera) {
 		return _cameraFallback.refreshFullListOnChange(type);
 	}
+#ifdef WEBRTC_TESTING_OPENAL
+	return true;
+#endif // WEBRTC_TESTING_OPENAL
 	return false;
 }
 
@@ -350,6 +367,37 @@ bool EnvironmentWin::desktopCaptureAllowed() const {
 
 std::optional<QString> EnvironmentWin::uniqueDesktopCaptureSource() const {
 	return {};
+}
+
+void EnvironmentWin::defaultIdRequested(DeviceType type) {
+	if (type == DeviceType::Camera) {
+		_cameraFallback.defaultIdRequested(type);
+#ifdef WEBRTC_TESTING_OPENAL
+	} else {
+		_audioFallback.defaultIdRequested(type);
+#endif // WEBRTC_TESTING_OPENAL
+	}
+}
+
+void EnvironmentWin::devicesRequested(DeviceType type) {
+	if (type == DeviceType::Camera) {
+		_cameraFallback.devicesRequested(type);
+#ifdef WEBRTC_TESTING_OPENAL
+	} else {
+		_audioFallback.devicesRequested(type);
+#endif // WEBRTC_TESTING_OPENAL
+	}
+}
+
+DeviceResolvedId EnvironmentWin::threadSafeResolveId(
+		const DeviceResolvedId &lastResolvedId,
+		const QString &savedId) {
+	return (lastResolvedId.type == DeviceType::Camera)
+		? _cameraFallback.threadSafeResolveId(lastResolvedId, savedId)
+#ifdef WEBRTC_TESTING_OPENAL
+		: _audioFallback.threadSafeResolveId(lastResolvedId, savedId);
+#endif // WEBRTC_TESTING_OPENAL
+		: lastResolvedId;
 }
 
 std::unique_ptr<Environment> CreateEnvironment(

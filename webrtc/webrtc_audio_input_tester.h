@@ -6,13 +6,15 @@
 //
 #pragma once
 
+#include "webrtc/webrtc_device_common.h"
+
 #include <crl/crl_object_on_thread.h>
 
 namespace Webrtc {
 
 class AudioInputTester {
 public:
-	explicit AudioInputTester(rpl::producer<QString> deviceId);
+	explicit AudioInputTester(rpl::producer<DeviceResolvedId> deviceId);
 	~AudioInputTester();
 
 	[[nodiscard]] float getAndResetLevel();

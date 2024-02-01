@@ -6,6 +6,8 @@
 //
 #pragma once
 
+#include "base/qt/qt_compare.h"
+
 #include <QString>
 
 namespace Webrtc {

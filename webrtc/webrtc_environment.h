@@ -59,6 +59,11 @@ public:
 		const DeviceResolvedId &lastResolvedId,
 		const QString &savedId) const;
 
+	void setCaptureMuted(bool muted);
+	void setCaptureMuteTracker(
+		not_null<CaptureMuteTracker*> tracker,
+		bool track);
+
 private:
 	static constexpr auto kTypeCount = 3;
 

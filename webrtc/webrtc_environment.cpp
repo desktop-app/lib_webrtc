@@ -148,6 +148,16 @@ DeviceResolvedId Environment::threadSafeResolveId(
 	return _platform->threadSafeResolveId(lastResolvedId, savedId);
 }
 
+void Environment::setCaptureMuted(bool muted) {
+	_platform->setCaptureMuted(muted);
+}
+
+void Environment::setCaptureMuteTracker(
+		not_null<CaptureMuteTracker*> tracker,
+		bool track) {
+	_platform->setCaptureMuteTracker(tracker, track);
+}
+
 void Environment::defaultChanged(
 		DeviceType type,
 		DeviceChangeReason reason,

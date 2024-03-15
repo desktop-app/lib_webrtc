@@ -41,6 +41,13 @@ public:
 		return lastResolvedId;
 	}
 
+	virtual void setCaptureMuted(bool muted) {
+	}
+	virtual void setCaptureMuteTracker(
+		not_null<CaptureMuteTracker*> tracker,
+		bool track) {
+	}
+
 };
 
 [[nodiscard]] std::unique_ptr<Environment> CreateEnvironment(

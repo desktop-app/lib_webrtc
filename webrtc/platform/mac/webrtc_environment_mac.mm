@@ -8,12 +8,37 @@
 
 #include "base/weak_ptr.h"
 #include "webrtc/webrtc_environment.h"
+#include "webrtc/webrtc_create_adm.h"
 
 #include <modules/audio_device/include/audio_device_defines.h>
+#include <api/task_queue/default_task_queue_factory.h>
 
 #import <AVFoundation/AVFoundation.h>
 #import <IOKit/hidsystem/IOHIDLib.h>
 #import <CoreAudio/CoreAudio.h>
+#import <Cocoa/Cocoa.h>
+
+@interface InputMuteObserver : NSObject {
+}
+
+- (id) init;
+- (void) inputMuteStateChange:(NSNotification *)aNotification;
+
+@end // @interface InputMuteObserver
+
+@implementation InputMuteObserver {
+}
+
+- (id) init {
+	if (self = [super init]) {
+	}
+	return self;
+}
+
+- (void) inputMuteStateChange:(NSNotification *)aNotification {
+}
+
+@end // @implementation InputMuteObserver
 
 namespace Webrtc::Platform {
 namespace {
@@ -338,6 +363,30 @@ EnvironmentMac::EnvironmentMac(not_null<EnvironmentDelegate*> delegate)
 	DefaultPlaybackDeviceChangedMonitor.registerEnvironment(this);
 	DefaultCaptureDeviceChangedMonitor.registerEnvironment(this);
 	AudioDeviceListChangedMonitor.registerEnvironment(this);
+
+	if (@available(macOS 14.0, *)) {
+		const auto weak = base::make_weak(this);
+		id block = [^(BOOL shouldBeMuted){
+			crl::on_main([weak, mute = shouldBeMuted ? true : false] {
+				if (const auto strong = weak.get()) {
+					if (const auto tracker = strong->_captureMuteTracker) {
+						strong->_captureMuted = mute;
+						strong->_captureMuteNotification = true;
+						tracker->captureMuteChanged(mute);
+						if (const auto strong = weak.get()) {
+							strong->_captureMuteNotification = false;
+						}
+					}
+				}
+			});
+			return YES;
+		} copy];
+		_lifetime.add([block] { [block release]; });
+
+		[[AVAudioApplication sharedInstance]
+			setInputMuteStateChangeHandler:block
+			error:nil];
+	}
 }
 
 EnvironmentMac::~EnvironmentMac() {
@@ -485,6 +534,91 @@ void EnvironmentMac::defaultIdRequested(DeviceType type) {
 }
 
 void EnvironmentMac::devicesRequested(DeviceType type) {
+}
+
+void EnvironmentMac::setCaptureMuted(bool muted) {
+	if (@available(macOS 14.0, *)) {
+		if (!_captureMuteNotification) {
+			const auto value = muted ? YES : NO;
+			[[AVAudioApplication sharedInstance] setInputMuted:value error:nil];
+		}
+	}
+}
+
+void EnvironmentMac::captureMuteSubscribe() {
+	if (@available(macOS 14.0, *)) {
+		id observer = [[InputMuteObserver alloc] init];
+		[[[NSWorkspace sharedWorkspace] notificationCenter]
+			addObserver:observer
+			selector:@selector(inputMuteStateChange:)
+			name:AVAudioApplicationInputMuteStateChangeNotification
+			object:nil];
+
+		_admTaskQueueFactory = webrtc::CreateDefaultTaskQueueFactory();
+		const auto saveSetDeviceIdCallback = [=](
+				Fn<void(DeviceResolvedId)> setDeviceIdCallback) {
+			_admSetDeviceIdCallback = std::move(setDeviceIdCallback);
+			if (!_admCaptureDeviceId.isDefault()) {
+				_admSetDeviceIdCallback(_admCaptureDeviceId);
+			}
+		};
+		_adm = CreateAudioDeviceModule(
+			_admTaskQueueFactory.get(),
+			saveSetDeviceIdCallback);
+
+		_captureMuteSubscriptionLifetime.add([=] {
+			_admSetDeviceIdCallback = nullptr;
+			_adm = nullptr;
+			_admTaskQueueFactory = nullptr;
+
+			[[[NSWorkspace sharedWorkspace] notificationCenter]
+				removeObserver:observer
+				name:AVAudioApplicationInputMuteStateChangeNotification
+				object:nil];
+			[observer release];
+		});
+	}
+}
+
+void EnvironmentMac::captureMuteUnsubscribe() {
+	_captureMuteSubscriptionLifetime.destroy();
+}
+
+void EnvironmentMac::captureMuteRestartAdm() {
+	_adm->StopRecording();
+	_adm->SetRecordingDevice(0);
+	if (_adm->InitRecording() == 0) {
+		_adm->StartRecording();
+	}
+}
+
+void EnvironmentMac::setCaptureMuteTracker(
+		not_null<CaptureMuteTracker*> tracker,
+		bool track) {
+	if (@available(macOS 14.0, *)) {
+		if (track) {
+			if (!_captureMuteTracker) {
+				captureMuteSubscribe();
+			} else if (_captureMuteTracker == tracker) {
+				return;
+			}
+			_captureMuteTrackerLifetime.destroy();
+			_captureMuteTracker = tracker;
+			_captureMuteTracker->captureMuteDeviceId(
+			) | rpl::start_with_next([=](DeviceResolvedId deviceId) {
+				_admSetDeviceIdCallback(deviceId);
+				captureMuteRestartAdm();
+			}, _captureMuteTrackerLifetime);
+		} else if (_captureMuteTracker == tracker) {
+			_captureMuteTrackerLifetime.destroy();
+			_captureMuteTracker = nullptr;
+			captureMuteUnsubscribe();
+			if (!_captureMuted) {
+				_captureMuted = true;
+				setCaptureMuted(true);
+			}
+		}
+	}
 }
 
 std::unique_ptr<Environment> CreateEnvironment(

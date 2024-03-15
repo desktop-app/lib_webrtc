@@ -83,4 +83,10 @@ struct DeviceResolvedId {
 		const DeviceResolvedId &b) = default;
 };
 
+class CaptureMuteTracker {
+public:
+	virtual void captureMuteChanged(bool muted) = 0;
+	[[nodiscard]] virtual rpl::producer<DeviceResolvedId> captureMuteDeviceId() = 0;
+};
+
 } // namespace Webrtc

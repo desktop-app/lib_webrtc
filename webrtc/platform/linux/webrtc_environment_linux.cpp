@@ -37,9 +37,7 @@ EnvironmentLinux::EnvironmentLinux(not_null<EnvironmentDelegate*> delegate)
 : _audioFallback(delegate)
 , _cameraFallback(delegate) {
 #ifdef WEBRTC_USE_PIPEWIRE
-	if (webrtc::InitPipewireStubs()) {
-		_pipewireInitialized = true;
-	} else {
+	if (!webrtc::InitPipewireStubs()) {
 		LOG(("Audio Info: Failed to load pipewire 0.3 stubs."));
 	}
 #endif // WEBRTC_USE_PIPEWIRE
@@ -73,11 +71,7 @@ bool EnvironmentLinux::refreshFullListOnChange(DeviceType type) {
 }
 
 bool EnvironmentLinux::desktopCaptureAllowed() const {
-#ifdef WEBRTC_USE_PIPEWIRE
-	return _pipewireInitialized;
-#else // WEBRTC_USE_PIPEWIRE
 	return true;
-#endif // WEBRTC_USE_PIPEWIRE
 }
 
 std::optional<QString> EnvironmentLinux::uniqueDesktopCaptureSource() const {

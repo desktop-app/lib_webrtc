@@ -37,7 +37,6 @@ public:
 private:
 	details::EnvironmentOpenAL _audioFallback;
 	details::EnvironmentVideoCapture _cameraFallback;
-	bool _pipewireInitialized = false;
 
 };
 

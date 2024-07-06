@@ -286,7 +286,6 @@ std::vector<DeviceInfo> EnvironmentWin::devices(DeviceType type) {
 	const auto flow = (type == DeviceType::Playback)
 		? eRender
 		: eCapture;
-	const auto role = eConsole;
 	auto collection = winrt::com_ptr<IMMDeviceCollection>();
 	auto hr = _enumerator->EnumAudioEndpoints(
 		flow,

@@ -11,8 +11,9 @@
 #include "crl/crl_object_on_thread.h"
 #include "crl/crl_async.h"
 
-#include <media/engine/webrtc_media_engine.h>
 #include <api/task_queue/default_task_queue_factory.h>
+#include <modules/audio_device/include/audio_device_defines.h>
+#include <modules/audio_device/include/audio_device.h>
 
 namespace Webrtc {
 

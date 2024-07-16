@@ -11,6 +11,7 @@
 #include "webrtc/webrtc_create_adm.h"
 
 #include <modules/audio_device/include/audio_device_defines.h>
+#include <modules/audio_device/include/audio_device.h>
 #include <api/task_queue/default_task_queue_factory.h>
 
 #import <AVFoundation/AVFoundation.h>

@@ -11,9 +11,14 @@
 
 #include <media/engine/webrtc_media_engine.h>
 
-namespace rtc {
+namespace webrtc {
 template <class T>
 class scoped_refptr;
+} // namespace webrtc
+
+namespace rtc {
+template <typename T>
+using scoped_refptr = webrtc::scoped_refptr<T>;
 } // namespace rtc
 
 namespace webrtc {

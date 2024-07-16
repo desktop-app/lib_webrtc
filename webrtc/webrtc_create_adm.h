@@ -11,12 +11,14 @@
 namespace webrtc {
 class AudioDeviceModule;
 class TaskQueueFactory;
-}
-
-namespace rtc {
 template <class T>
 class scoped_refptr;
-}
+} // namespace webrtc
+
+namespace rtc {
+template <typename T>
+using scoped_refptr = webrtc::scoped_refptr<T>;
+} // namespace rtc
 
 namespace Webrtc {
 

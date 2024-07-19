@@ -10,15 +10,34 @@
 
 #include <api/task_queue/default_task_queue_factory.h>
 #include <modules/video_capture/video_capture_factory.h>
+#include <modules/video_capture/video_capture_options.h>
 #include <modules/audio_device/include/audio_device_factory.h>
 
 namespace Webrtc::details {
 namespace {
 
+#ifdef WEBRTC_LINUX
+[[nodiscard]] webrtc::VideoCaptureOptions GetVideoCaptureOptions() {
+	auto result = webrtc::VideoCaptureOptions();
+	result.set_allow_v4l2(true);
+#ifdef WEBRTC_USE_PIPEWIRE
+	result.set_allow_pipewire(true);
+#endif
+	return result;
+}
+#endif
+
 [[nodiscard]] std::vector<DeviceInfo> GetDevices() {
+#ifdef WEBRTC_LINUX
+	auto options = GetVideoCaptureOptions();
+	const auto info = std::unique_ptr<
+		webrtc::VideoCaptureModule::DeviceInfo
+	>(webrtc::VideoCaptureFactory::CreateDeviceInfo(&options));
+#else // WEBRTC_LINUX
 	const auto info = std::unique_ptr<
 		webrtc::VideoCaptureModule::DeviceInfo
 	>(webrtc::VideoCaptureFactory::CreateDeviceInfo());
+#endif
 
 	auto result = std::vector<DeviceInfo>();
 	if (!info) {

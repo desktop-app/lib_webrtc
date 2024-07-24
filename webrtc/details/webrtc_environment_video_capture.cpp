@@ -10,8 +10,11 @@
 
 #include <api/task_queue/default_task_queue_factory.h>
 #include <modules/video_capture/video_capture_factory.h>
-#include <modules/video_capture/video_capture_options.h>
 #include <modules/audio_device/include/audio_device_factory.h>
+
+#ifdef WEBRTC_LINUX // Breaks compilation on MSVC because of ERROR define.
+#include <modules/video_capture/video_capture_options.h>
+#endif // WEBRTC_LINUX
 
 namespace Webrtc::details {
 namespace {

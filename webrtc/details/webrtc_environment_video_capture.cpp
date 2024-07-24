@@ -21,7 +21,9 @@ namespace {
 	auto result = webrtc::VideoCaptureOptions();
 	result.set_allow_v4l2(true);
 #ifdef WEBRTC_USE_PIPEWIRE
-	result.set_allow_pipewire(true);
+	//result.set_allow_pipewire(true);
+	// This requires a call to result.Init(callback)
+	// and waiting for the callback to finish.
 #endif
 	return result;
 }

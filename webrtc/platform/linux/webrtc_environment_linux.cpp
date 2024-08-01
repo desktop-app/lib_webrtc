@@ -9,7 +9,7 @@
 #include "base/debug_log.h"
 
 #ifdef WEBRTC_USE_PIPEWIRE
-#include <modules/desktop_capture/linux/wayland/base_capturer_pipewire.h>
+#include <modules/portal/pipewire_utils.h>
 #endif // WEBRTC_USE_PIPEWIRE
 
 namespace Webrtc::Platform {
@@ -18,7 +18,7 @@ EnvironmentLinux::EnvironmentLinux(not_null<EnvironmentDelegate*> delegate)
 : _audioFallback(delegate)
 , _cameraFallback(delegate) {
 #ifdef WEBRTC_USE_PIPEWIRE
-	if (!webrtc::BaseCapturerPipeWire::IsSupported()) {
+	if (!webrtc::InitializePipeWire()) {
 		LOG(("Audio Info: Failed to load pipewire 0.3 stubs."));
 	}
 #endif // WEBRTC_USE_PIPEWIRE

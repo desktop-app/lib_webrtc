@@ -9,6 +9,7 @@
 #include "base/debug_log.h"
 
 #ifdef WEBRTC_USE_PIPEWIRE
+#include <modules/desktop_capture/linux/wayland/base_capturer_pipewire.h>
 #include <modules/portal/pipewire_utils.h>
 #endif // WEBRTC_USE_PIPEWIRE
 

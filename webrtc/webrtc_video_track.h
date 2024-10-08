@@ -81,6 +81,7 @@ struct FrameYUV420 {
 };
 
 struct FrameWithInfo {
+	int64 mcstimestamp = 0;
 	QImage original;
 	FrameYUV420 *yuv420 = nullptr;
 	FrameFormat format = FrameFormat::None;

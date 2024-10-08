@@ -165,6 +165,8 @@ QImage PrepareByRequest(
 } // namespace
 
 struct VideoTrack::Frame {
+	int64 mcstimestamp = 0;
+
 	QImage original;
 	QImage prepared;
 	rtc::scoped_refptr<webrtc::I420BufferInterface> native;
@@ -283,6 +285,10 @@ bool VideoTrack::Sink::decodeFrame(
 	if (size.isEmpty()) {
 		frame->format = FrameFormat::None;
 		return false;
+	}
+	frame->mcstimestamp = nativeVideoFrame.timestamp_us();
+	if (!frame->mcstimestamp) {
+		frame->mcstimestamp = crl::now() * 1000;
 	}
 	if (!frame->requireARGB32) {
 		if (!frame->original.isNull()) {
@@ -526,6 +532,7 @@ FrameWithInfo VideoTrack::frameWithInfo(bool requireARGB32) const {
 		data.frame->requireARGB32 = requireARGB32;
 	}
 	return {
+		.mcstimestamp = data.frame->mcstimestamp,
 		.original = data.frame->original,
 		.yuv420 = &data.frame->yuv420,
 		.format = data.frame->format,

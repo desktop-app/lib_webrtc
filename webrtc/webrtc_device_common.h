@@ -86,7 +86,14 @@ struct DeviceResolvedId {
 class CaptureMuteTracker {
 public:
 	virtual void captureMuteChanged(bool muted) = 0;
-	[[nodiscard]] virtual rpl::producer<DeviceResolvedId> captureMuteDeviceId() = 0;
+	[[nodiscard]] virtual auto captureMuteDeviceId()
+		-> rpl::producer<DeviceResolvedId> = 0;
+};
+
+enum class RecordAvailability : uchar {
+	None,
+	Audio,
+	VideoAndAudio,
 };
 
 } // namespace Webrtc

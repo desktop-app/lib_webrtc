@@ -6,6 +6,7 @@
 //
 #pragma once
 
+#include "base/weak_ptr.h"
 #include "webrtc/webrtc_device_common.h"
 
 #include <rpl/producer.h>
@@ -34,7 +35,9 @@ namespace Webrtc {
 
 struct DeviceId;
 
-class Environment final : private Platform::EnvironmentDelegate {
+class Environment final
+	: private Platform::EnvironmentDelegate
+	, private base::has_weak_ptr {
 public:
 	Environment();
 	~Environment();
@@ -63,6 +66,11 @@ public:
 	void setCaptureMuteTracker(
 		not_null<CaptureMuteTracker*> tracker,
 		bool track);
+
+	[[nodiscard]] RecordAvailability recordAvailability() const;
+	[[nodiscard]] auto recordAvailabilityValue() const
+		-> rpl::producer<RecordAvailability>;
+	void refreshRecordAvailability();
 
 private:
 	static constexpr auto kTypeCount = 3;
@@ -112,9 +120,14 @@ private:
 		DeviceStateChange state) override;
 	void devicesForceRefresh(DeviceType type) override;
 
+	void applyRecordAvailability(RecordAvailability value);
+
 	const std::unique_ptr<Platform::Environment> _platform;
 
 	std::array<Devices, kTypeCount> _devices;
+	rpl::variable<RecordAvailability> _recordAvailability;
+	bool _recordAvailabilityRefreshing = false;
+	bool _recordAvailabilityRefreshPending = false;
 
 	rpl::lifetime _lifetime;
 

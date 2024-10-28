@@ -36,8 +36,9 @@ public:
 		const DeviceResolvedId &lastResolvedId,
 		const QString &savedId) override;
 
-private:
 	[[nodiscard]] static QString DefaultId(DeviceType type);
+
+private:
 	[[nodiscard]] static DeviceResolvedId DefaultResolvedId(DeviceType type);
 	[[nodiscard]] static DeviceResolvedId ResolveId(
 		DeviceType type,

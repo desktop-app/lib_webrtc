@@ -8,6 +8,10 @@
 
 #include "base/debug_log.h"
 #include "webrtc/platform/webrtc_platform_environment.h"
+#include "webrtc/details/webrtc_environment_openal.h"
+#include "webrtc/details/webrtc_environment_video_capture.h"
+
+#include <crl/crl_async.h>
 
 namespace Webrtc {
 namespace {
@@ -156,6 +160,51 @@ void Environment::setCaptureMuteTracker(
 		not_null<CaptureMuteTracker*> tracker,
 		bool track) {
 	_platform->setCaptureMuteTracker(tracker, track);
+}
+
+RecordAvailability Environment::recordAvailability() const {
+	const_cast<Environment*>(this)->refreshRecordAvailability();
+	return _recordAvailability.current();
+}
+
+auto Environment::recordAvailabilityValue() const
+->rpl::producer<RecordAvailability> {
+	const_cast<Environment*>(this)->refreshRecordAvailability();
+	return _recordAvailability.value();
+}
+
+void Environment::refreshRecordAvailability() {
+	if (_recordAvailabilityRefreshing) {
+		_recordAvailabilityRefreshPending = true;
+		return;
+	}
+	_recordAvailabilityRefreshing = true;
+	const auto strong = static_cast<base::has_weak_ptr*>(this);
+	const auto weak = base::make_weak(strong);
+	crl::async([weak] {
+		const auto type = DeviceType::Capture;
+		const auto audio = details::EnvironmentOpenAL::DefaultId(type);
+		const auto video = details::EnvironmentVideoCapture::DefaultId();
+		const auto availability = audio.isEmpty()
+			? RecordAvailability::None
+			: video.isEmpty()
+			? RecordAvailability::Audio
+			: RecordAvailability::VideoAndAudio;
+		crl::on_main([weak, availability] {
+			if (const auto strong = weak.get()) {
+				const auto that = static_cast<Environment*>(strong);
+				that->applyRecordAvailability(availability);
+			}
+		});
+	});
+}
+
+void Environment::applyRecordAvailability(RecordAvailability value) {
+	_recordAvailability = value;
+	_recordAvailabilityRefreshing = false;
+	if (base::take(_recordAvailabilityRefreshPending)) {
+		refreshRecordAvailability();
+	}
 }
 
 void Environment::defaultChanged(

@@ -30,6 +30,8 @@ public:
 	void defaultIdRequested(DeviceType type) override;
 	void devicesRequested(DeviceType type) override;
 
+	[[nodiscard]] static QString DefaultId();
+
 private:
 	const not_null<EnvironmentDelegate*> _delegate;
 

@@ -83,8 +83,7 @@ EnvironmentVideoCapture::~EnvironmentVideoCapture() {
 QString EnvironmentVideoCapture::defaultId(DeviceType type) {
 	Expects(type == DeviceType::Camera);
 
-	const auto devices = GetDevices();
-	return devices.empty() ? QString() : devices.front().id;
+	return DefaultId();
 }
 
 DeviceInfo EnvironmentVideoCapture::device(
@@ -124,6 +123,11 @@ void EnvironmentVideoCapture::defaultIdRequested(DeviceType type) {
 
 void EnvironmentVideoCapture::devicesRequested(DeviceType type) {
 	_delegate->devicesForceRefresh(type);
+}
+
+QString EnvironmentVideoCapture::DefaultId() {
+	const auto devices = GetDevices();
+	return devices.empty() ? QString() : devices.front().id;
 }
 
 } // namespace Webrtc::details

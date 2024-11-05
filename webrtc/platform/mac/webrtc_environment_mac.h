@@ -54,6 +54,8 @@ public:
 	void defaultCaptureDeviceChanged();
 	void audioDeviceListChanged();
 
+	[[nodiscard]] static QString DefaultId(DeviceType type);
+
 private:
 	void captureMuteSubscribe();
 	void captureMuteUnsubscribe();

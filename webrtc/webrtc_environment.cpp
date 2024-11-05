@@ -11,6 +11,10 @@
 #include "webrtc/details/webrtc_environment_openal.h"
 #include "webrtc/details/webrtc_environment_video_capture.h"
 
+#ifdef WEBRTC_MAC
+#include "webrtc/platform/mac/webrtc_environment_mac.h"
+#endif // WEBRTC_MAC
+
 #include <crl/crl_async.h>
 
 namespace Webrtc {
@@ -184,7 +188,12 @@ void Environment::refreshRecordAvailability() {
 	crl::async([weak] {
 		const auto type = DeviceType::Capture;
 		const auto audio = details::EnvironmentOpenAL::DefaultId(type);
+#ifdef WEBRTC_MAC
+		const auto vtype = DeviceType::Camera;
+		const auto video = Platform::EnvironmentMac::DefaultId(vtype);
+#else // WEBRTC_MAC
 		const auto video = details::EnvironmentVideoCapture::DefaultId();
+#endif // WEBRTC_MAC
 		const auto availability = audio.isEmpty()
 			? RecordAvailability::None
 			: video.isEmpty()

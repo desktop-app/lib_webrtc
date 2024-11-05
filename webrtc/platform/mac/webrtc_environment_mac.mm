@@ -454,6 +454,10 @@ void EnvironmentMac::audioDeviceListChanged() {
 }
 
 QString EnvironmentMac::defaultId(DeviceType type) {
+	return DefaultId(type);
+}
+
+QString EnvironmentMac::DefaultId(DeviceType type) {
 	if (type == DeviceType::Camera) {
 		return CaptureDeviceId(
 			[AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo]);

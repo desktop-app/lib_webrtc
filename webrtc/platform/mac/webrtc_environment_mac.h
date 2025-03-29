@@ -6,6 +6,7 @@
 //
 #pragma once
 
+#include "base/timer.h"
 #include "base/weak_ptr.h"
 #include "webrtc/platform/webrtc_platform_environment.h"
 
@@ -61,8 +62,11 @@ private:
 	void captureMuteUnsubscribe();
 	void captureMuteRestartAdm();
 
+	void sendCaptureMutedValue();
+
 	const not_null<EnvironmentDelegate*> _delegate;
 
+	base::Timer _captureMuteDebounceTimer;
 	CaptureMuteTracker *_captureMuteTracker = nullptr;
 	bool _captureMuteNotification = false;
 	bool _captureMuted = false;

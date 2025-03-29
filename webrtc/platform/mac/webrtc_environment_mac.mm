@@ -45,6 +45,7 @@ namespace Webrtc::Platform {
 namespace {
 
 constexpr auto kMaxNameLength = 256;
+constexpr auto kCaptureMuteDebounceTimeout = crl::time(300);
 
 class EmptyCallback final : public webrtc::AudioTransport {
 public:
@@ -402,7 +403,8 @@ OSStatus PropertyMonitor::Callback(
 } // namespace
 
 EnvironmentMac::EnvironmentMac(not_null<EnvironmentDelegate*> delegate)
-: _delegate(delegate) {
+: _delegate(delegate)
+, _captureMuteDebounceTimer([=] { sendCaptureMutedValue(); }) {
 	DefaultPlaybackDeviceChangedMonitor.registerEnvironment(this);
 	DefaultCaptureDeviceChangedMonitor.registerEnvironment(this);
 	AudioDeviceListChangedMonitor.registerEnvironment(this);
@@ -414,11 +416,8 @@ EnvironmentMac::EnvironmentMac(not_null<EnvironmentDelegate*> delegate)
 				if (const auto strong = weak.get()) {
 					if (const auto tracker = strong->_captureMuteTracker) {
 						strong->_captureMuted = mute;
-						strong->_captureMuteNotification = true;
-						tracker->captureMuteChanged(mute);
-						if (const auto strong = weak.get()) {
-							strong->_captureMuteNotification = false;
-						}
+						strong->_captureMuteDebounceTimer.callOnce(
+							kCaptureMuteDebounceTimeout);
 					}
 				}
 			});
@@ -436,6 +435,17 @@ EnvironmentMac::~EnvironmentMac() {
 	DefaultPlaybackDeviceChangedMonitor.unregisterEnvironment(this);
 	DefaultCaptureDeviceChangedMonitor.unregisterEnvironment(this);
 	AudioDeviceListChangedMonitor.unregisterEnvironment(this);
+}
+
+void EnvironmentMac::sendCaptureMutedValue() {
+	Expects(_captureMuteTracker != nullptr);
+
+	const auto weak = base::make_weak(this);
+	_captureMuteNotification = true;
+	_captureMuteTracker->captureMuteChanged(_captureMuted);
+	if (const auto strong = weak.get()) {
+		strong->_captureMuteNotification = false;
+	}
 }
 
 void EnvironmentMac::defaultPlaybackDeviceChanged() {
@@ -662,6 +672,7 @@ void EnvironmentMac::setCaptureMuteTracker(
 			}, _captureMuteTrackerLifetime);
 		} else if (_captureMuteTracker == tracker) {
 			_captureMuteTrackerLifetime.destroy();
+			_captureMuteDebounceTimer.cancel();
 			_captureMuteTracker = nullptr;
 			captureMuteUnsubscribe();
 			if (!_captureMuted) {

@@ -16,6 +16,7 @@
 #include <winrt/base.h>
 
 typedef struct SwrContext SwrContext;
+typedef struct AVChannelLayout AVChannelLayout;
 
 namespace rtc {
 class Thread;
@@ -149,7 +150,7 @@ private:
 	bool setupResampler(const WAVEFORMATEX &format);
 	bool setupResampler(
 		int channels,
-		uint64 channelLayout,
+		AVChannelLayout channelLayout,
 		int inputFormat, // AVSampleFormat
 		int sampleRate,
 		Fn<std::string()> info);

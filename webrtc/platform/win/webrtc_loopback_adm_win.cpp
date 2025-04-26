@@ -80,28 +80,29 @@ void SetStringToArray(const std::string &string, char *array, int size) {
 	return result;
 }
 
-[[nodiscard]] uint64 DefaultChannelLayout(int channels) {
-	return (channels == 1)
-		? AV_CH_LAYOUT_MONO
-		: AV_CH_LAYOUT_STEREO;
+[[nodiscard]] AVChannelLayout DefaultChannelLayout(int channels) {
+	if (channels == 1) {
+		return AV_CHANNEL_LAYOUT_MONO;
+	}
+	return AV_CHANNEL_LAYOUT_STEREO;
 }
 
-[[nodiscard]] uint64 ChannelLayout(DWORD channelMask) {
+[[nodiscard]] std::optional<AVChannelLayout> ChannelLayout(DWORD channelMask) {
 	switch (channelMask) {
-	case KSAUDIO_SPEAKER_MONO: return AV_CH_LAYOUT_MONO;
-	case KSAUDIO_SPEAKER_STEREO: return AV_CH_LAYOUT_STEREO;
-	case KSAUDIO_SPEAKER_2POINT1: return AV_CH_LAYOUT_2POINT1;
-	case KSAUDIO_SPEAKER_3POINT1: return AV_CH_LAYOUT_3POINT1;
-	case KSAUDIO_SPEAKER_QUAD: return AV_CH_LAYOUT_QUAD;
-	case KSAUDIO_SPEAKER_SURROUND: return AV_CH_LAYOUT_SURROUND;
-	case KSAUDIO_SPEAKER_5POINT0: return AV_CH_LAYOUT_5POINT0;
-	case KSAUDIO_SPEAKER_5POINT1_BACK: return AV_CH_LAYOUT_5POINT1_BACK;
-	case KSAUDIO_SPEAKER_7POINT0: return AV_CH_LAYOUT_7POINT0;
-	case KSAUDIO_SPEAKER_7POINT1_WIDE: return AV_CH_LAYOUT_7POINT1_WIDE;
-	case KSAUDIO_SPEAKER_5POINT1_SURROUND: return AV_CH_LAYOUT_5POINT1;
-	case KSAUDIO_SPEAKER_7POINT1_SURROUND: return AV_CH_LAYOUT_7POINT1;
+	case KSAUDIO_SPEAKER_MONO: return AVChannelLayout(AV_CHANNEL_LAYOUT_MONO);
+	case KSAUDIO_SPEAKER_STEREO: return AVChannelLayout(AV_CHANNEL_LAYOUT_STEREO);
+	case KSAUDIO_SPEAKER_2POINT1: return AVChannelLayout(AV_CHANNEL_LAYOUT_2POINT1);
+	case KSAUDIO_SPEAKER_3POINT1: return AVChannelLayout(AV_CHANNEL_LAYOUT_3POINT1);
+	case KSAUDIO_SPEAKER_QUAD: return AVChannelLayout(AV_CHANNEL_LAYOUT_QUAD);
+	case KSAUDIO_SPEAKER_SURROUND: return AVChannelLayout(AV_CHANNEL_LAYOUT_SURROUND);
+	case KSAUDIO_SPEAKER_5POINT0: return AVChannelLayout(AV_CHANNEL_LAYOUT_5POINT0);
+	case KSAUDIO_SPEAKER_5POINT1_BACK: return AVChannelLayout(AV_CHANNEL_LAYOUT_5POINT1_BACK);
+	case KSAUDIO_SPEAKER_7POINT0: return AVChannelLayout(AV_CHANNEL_LAYOUT_7POINT0);
+	case KSAUDIO_SPEAKER_7POINT1_WIDE: return AVChannelLayout(AV_CHANNEL_LAYOUT_7POINT1_WIDE);
+	case KSAUDIO_SPEAKER_5POINT1_SURROUND: return AVChannelLayout(AV_CHANNEL_LAYOUT_5POINT1);
+	case KSAUDIO_SPEAKER_7POINT1_SURROUND: return AVChannelLayout(AV_CHANNEL_LAYOUT_7POINT1);
 	}
-	return 0;
+	return {};
 }
 
 [[nodiscard]] AVSampleFormat InputFormatPcm(int bitsPerSample) {
@@ -652,7 +653,7 @@ bool AudioDeviceLoopbackWin::setupResampler(const WAVEFORMATEX &format) {
 		}
 		return setupResampler(
 			format.nChannels,
-			channelLayout,
+			*channelLayout,
 			InputFormatPcm(format.wBitsPerSample),
 			format.nSamplesPerSec,
 			[&] { return Serialize(ext); });
@@ -664,7 +665,7 @@ bool AudioDeviceLoopbackWin::setupResampler(const WAVEFORMATEX &format) {
 		}
 		return setupResampler(
 			format.nChannels,
-			channelLayout,
+			*channelLayout,
 			InputFormatFloat(format.wBitsPerSample),
 			format.nSamplesPerSec,
 			[&] { return Serialize(ext); });
@@ -675,32 +676,34 @@ bool AudioDeviceLoopbackWin::setupResampler(const WAVEFORMATEX &format) {
 
 bool AudioDeviceLoopbackWin::setupResampler(
 		int channels,
-		uint64 channelLayout,
+		AVChannelLayout channelLayout,
 		int inputFormat, // AVSampleFormat
 		int sampleRate,
 		Fn<std::string()> info) {
-	const auto dstChannelLayout = AV_CH_LAYOUT_STEREO;
+	const auto dstChannelLayout = AVChannelLayout(AV_CHANNEL_LAYOUT_STEREO);
 	const auto dstSampleFormat = AV_SAMPLE_FMT_S16;
 	const auto dstSampleRate = kWantedFrequency;
 	const auto srcChannelLayout = channelLayout;
 	const auto srcSampleFormat = AVSampleFormat(inputFormat);
 	const auto srcSampleRate = sampleRate;
-	_swrContext = swr_alloc_set_opts(
-		_swrContext,
-		dstChannelLayout,
+	auto result = swr_alloc_set_opts2(
+		&_swrContext,
+		&dstChannelLayout,
 		dstSampleFormat,
 		dstSampleRate,
-		srcChannelLayout,
+		&srcChannelLayout,
 		srcSampleFormat,
 		srcSampleRate,
 		0,
 		nullptr);
-	auto result = 0;
+	char err[AV_ERROR_MAX_STRING_SIZE] = { 0 };
 	if (!_swrContext) {
-		captureFailed("Could not allocate resampler: " + info());
+		captureFailed("Could not allocate resampler, error "
+			+ std::to_string(result)
+			+ "(" + av_make_error_string(err, sizeof(err), result) + "): "
+			+ info());
 		return false;
 	} else if ((result = swr_init(_swrContext)) < 0) {
-		char err[AV_ERROR_MAX_STRING_SIZE] = { 0 };
 		captureFailed("Could not init resampler, error "
 			+ std::to_string(result)
 			+ "(" + av_make_error_string(err, sizeof(err), result) + "): "

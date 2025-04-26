@@ -128,6 +128,7 @@ EnvironmentWin::EnvironmentWin(not_null<EnvironmentDelegate*> delegate)
 , _cameraFallback(delegate) {
 #ifndef WEBRTC_TESTING_OPENAL
 	using namespace base::WinRT;
+	const CLSID CLSID_MMDeviceEnumerator = __uuidof(MMDeviceEnumerator);
 	_enumerator = TryCreateInstance<IMMDeviceEnumerator>(
 		CLSID_MMDeviceEnumerator);
 	if (!_enumerator) {

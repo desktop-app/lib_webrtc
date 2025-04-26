@@ -50,7 +50,6 @@ if (WIN32)
     PRIVATE
         WEBRTC_WIN
     )
-    nuget_add_winrt(lib_webrtc)
 elseif (APPLE)
     target_compile_definitions(lib_webrtc
     PRIVATE

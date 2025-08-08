@@ -414,7 +414,7 @@ EnvironmentMac::EnvironmentMac(not_null<EnvironmentDelegate*> delegate)
 		id block = [^(BOOL shouldBeMuted){
 			crl::on_main([weak, mute = shouldBeMuted ? true : false] {
 				if (const auto strong = weak.get()) {
-					if (const auto tracker = strong->_captureMuteTracker) {
+					if (strong->_captureMuteTracker) {
 						strong->_captureMuted = mute;
 						strong->_captureMuteDebounceTimer.callOnce(
 							kCaptureMuteDebounceTimeout);

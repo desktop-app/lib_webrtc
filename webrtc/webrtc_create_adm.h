@@ -7,6 +7,8 @@
 #pragma once
 
 #include <functional>
+#include <memory>
+#include <mutex>
 
 namespace webrtc {
 class AudioDeviceModule;
@@ -38,6 +40,40 @@ AudioDeviceModulePtr CreateLoopbackAudioDeviceModule(
 [[nodiscard]] bool LoopbackAudioCaptureSupported();
 
 auto LoopbackAudioDeviceModuleCreator()
+-> std::function<AudioDeviceModulePtr(webrtc::TaskQueueFactory*)>;
+
+namespace details {
+class MixingAudioDeviceModule;
+} // namespace details
+
+class MixingAudioControl final {
+public:
+	void setLoopbackEnabled(bool enabled);
+	[[nodiscard]] bool loopbackEnabled() const;
+
+	void setMicrophoneMuted(bool muted);
+	[[nodiscard]] bool microphoneMuted() const;
+
+	void setPlaybackVolume(float volume);
+	[[nodiscard]] float playbackVolume() const;
+
+private:
+	friend class details::MixingAudioDeviceModule;
+	void attach(details::MixingAudioDeviceModule *module);
+	void detach();
+
+	std::mutex _mutex;
+	details::MixingAudioDeviceModule *_module = nullptr;
+	bool _pendingEnabled = false;
+	bool _microphoneMuted = false;
+	float _playbackVolume = 1.f;
+
+};
+
+auto MixingAudioDeviceModuleCreator(
+	std::function<AudioDeviceModulePtr(webrtc::TaskQueueFactory*)>
+		innerCreator,
+	std::shared_ptr<MixingAudioControl> control)
 -> std::function<AudioDeviceModulePtr(webrtc::TaskQueueFactory*)>;
 
 } // namespace Webrtc

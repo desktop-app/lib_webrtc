@@ -12,9 +12,14 @@
 #include <modules/audio_device/include/audio_device.h>
 #include <modules/audio_device/include/audio_device_factory.h>
 
+#include <algorithm>
 #include <atomic>
+#include <cctype>
+#include <chrono>
 #include <cstring>
+#include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -556,7 +561,7 @@ class MixingAudioDeviceModule : public webrtc::AudioDeviceModule {
 public:
 	MixingAudioDeviceModule(
 		rtc::scoped_refptr<webrtc::AudioDeviceModule> inner,
-		webrtc::TaskQueueFactory *taskQueueFactory,
+		[[maybe_unused]] webrtc::TaskQueueFactory *taskQueueFactory,
 		std::shared_ptr<MixingAudioControl> control)
 	: _inner(std::move(inner))
 #ifdef WEBRTC_WIN
@@ -616,13 +621,12 @@ public:
 				_collector);
 			_mixingTransport->setMixingEnabled(_loopbackActive);
 			if (_control) {
-				auto lock = std::lock_guard(_control->_mutex);
-				if (_control->_microphoneMuted) {
+				if (_control->microphoneMuted()) {
 					_mixingTransport->setMicrophoneMuted(true);
 				}
-				if (_control->_playbackVolume < 0.999f) {
-					_mixingTransport->setPlaybackVolume(
-						_control->_playbackVolume);
+				const auto volume = _control->playbackVolume();
+				if (volume < 0.999f) {
+					_mixingTransport->setPlaybackVolume(volume);
 				}
 			}
 			return _inner->RegisterAudioCallback(_mixingTransport.get());
@@ -985,6 +989,7 @@ void MixingAudioControl::setLoopbackEnabled(bool enabled) {
 }
 
 bool MixingAudioControl::loopbackEnabled() const {
+	auto lock = std::lock_guard(_mutex);
 	return _pendingEnabled;
 }
 
@@ -997,6 +1002,7 @@ void MixingAudioControl::setMicrophoneMuted(bool muted) {
 }
 
 bool MixingAudioControl::microphoneMuted() const {
+	auto lock = std::lock_guard(_mutex);
 	return _microphoneMuted;
 }
 
@@ -1009,6 +1015,7 @@ void MixingAudioControl::setPlaybackVolume(float volume) {
 }
 
 float MixingAudioControl::playbackVolume() const {
+	auto lock = std::lock_guard(_mutex);
 	return _playbackVolume;
 }
 

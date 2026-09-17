@@ -62,7 +62,7 @@ private:
 	void attach(details::MixingAudioDeviceModule *module);
 	void detach();
 
-	std::mutex _mutex;
+	mutable std::mutex _mutex;
 	details::MixingAudioDeviceModule *_module = nullptr;
 	bool _pendingEnabled = false;
 	bool _microphoneMuted = false;

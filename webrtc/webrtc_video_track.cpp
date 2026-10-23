@@ -312,6 +312,10 @@ bool VideoTrack::Sink::decodeFrame(
 	if (!FFmpeg::GoodStorageForFrame(frame->original, size)) {
 		frame->original = FFmpeg::CreateFrameStorage(size);
 	}
+	if (frame->original.isNull()) {
+		frame->format = FrameFormat::None;
+		return false;
+	}
 	_decodeContext = FFmpeg::MakeSwscalePointer(
 		size,
 		AV_PIX_FMT_YUV420P,

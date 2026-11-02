@@ -77,9 +77,11 @@ API_AVAILABLE(macos(14.0))
 }
 
 - (void)dealloc {
+	[_stream release];
 	if (_swrContext) {
 		swr_free(&_swrContext);
 	}
+	dispatch_release(_audioQueue);
 	[super dealloc];
 }
 
@@ -131,13 +133,21 @@ API_AVAILABLE(macos(14.0))
 	config.height = 2;
 	config.minimumFrameInterval = CMTimeMake(1, 1);
 
-	_stream = [[SCStream alloc]
+	if (_stream) {
+		auto previous = base::take(_stream);
+		[previous stopCaptureWithCompletionHandler:^(NSError *error) {
+			[previous release];
+		}];
+	}
+	auto stream = [[SCStream alloc]
 		initWithFilter:filter
 		configuration:config
 		delegate:self];
+	[filter release];
+	[config release];
 
 	NSError *addError = nil;
-	[_stream addStreamOutput:self
+	[stream addStreamOutput:self
 		type:SCStreamOutputTypeAudio
 		sampleHandlerQueue:_audioQueue
 		error:&addError];
@@ -145,20 +155,22 @@ API_AVAILABLE(macos(14.0))
 		RTC_LOG(LS_ERROR) << "Loopback ADM Mac: "
 			<< "failed to add stream output.";
 		_active = false;
-		_stream = nil;
+		[stream release];
 		return;
 	}
+	_stream = stream;
 
 	auto __weak weakCapture = self;
-	[_stream startCaptureWithCompletionHandler:^(NSError *startError) {
+	[stream startCaptureWithCompletionHandler:^(NSError *startError) {
 		if (startError) {
 			RTC_LOG(LS_ERROR) << "Loopback ADM Mac: "
 				<< "failed to start capture.";
 			if (auto strong = weakCapture) {
-				strong->_active = false;
 				dispatch_async(strong->_audioQueue, ^{
-					if (auto s = weakCapture) {
-						s->_stream = nil;
+					auto s = weakCapture;
+					if (s && s->_stream == stream) {
+						s->_active = false;
+						[base::take(s->_stream) release];
 					}
 				});
 			}
@@ -167,15 +179,13 @@ API_AVAILABLE(macos(14.0))
 }
 
 - (void)stopCapture {
-	if (!_active.exchange(false)) {
-		return;
-	}
+	_active = false;
 	dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 	dispatch_async(_audioQueue, ^{
 		if (self->_stream) {
-			auto stream = self->_stream;
-			self->_stream = nil;
+			auto stream = base::take(self->_stream);
 			[stream stopCaptureWithCompletionHandler:^(NSError *error) {
+				[stream release];
 				dispatch_semaphore_signal(sem);
 			}];
 		} else {
@@ -189,6 +199,12 @@ API_AVAILABLE(macos(14.0))
 	dispatch_semaphore_wait(
 		sem,
 		dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+	// WHY: a sample callback already entered still uses _audioDeviceBuffer,
+	// which the owner destroys right after this returns, so it has to finish
+	// here even after a timed out wait.
+	dispatch_sync(_audioQueue, ^{
+	});
+	dispatch_release(sem);
 }
 
 - (void)stream:(SCStream *)stream didStopWithError:(NSError *)error {
@@ -668,12 +684,13 @@ int32_t AudioDeviceLoopbackMac::StartRecording() {
 int32_t AudioDeviceLoopbackMac::StopRecording() {
 	if (!_recording) {
 		_recordingInitialized = false;
+		[base::take(_objc->helper) release];
 		return 0;
 	}
 	_recording = false;
 	if (@available(macOS 14.0, *)) {
 		[_objc->helper stopCapture];
-		_objc->helper = nil;
+		[base::take(_objc->helper) release];
 	}
 	_audioDeviceBuffer.StopRecording();
 	_recordingInitialized = false;
